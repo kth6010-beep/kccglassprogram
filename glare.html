@@ -1,0 +1,2132 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>건축 현휘 분석기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 레이아웃: 좌측 입력 패널(단계별) + 우측 작업 영역(시점 바 + 탭). 유리는 청록, 반사광은 호박색 */
+:root{
+  --bg:#edf0f3; --panel:#ffffff; --sunk:#f5f7f9; --ink:#16202a; --muted:#5a6776; --line:#d6dce3;
+  --glass:#22788a; --glass-soft:#d5ebef; --sun:#d9821a; --sun-soft:#fbe9d2;
+  --ok:#2e8a57; --warn:#c99312; --bad:#c8402f;
+  --nb:#c4cad2; --nb-edge:#8a95a2; --ground:#e3e7eb;
+  --f-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1318; --panel:#151c23; --sunk:#10161c; --ink:#e3e9ef; --muted:#93a0ae; --line:#28323d;
+  --glass:#5cb2c3; --glass-soft:#163039; --sun:#f0a346; --sun-soft:#3a2a15;
+  --ok:#4fb57c; --warn:#e0b23c; --bad:#e86a57;
+  --nb:#3a4450; --nb-edge:#5b6775; --ground:#1a2129; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1318; --panel:#151c23; --sunk:#10161c; --ink:#e3e9ef; --muted:#93a0ae; --line:#28323d;
+  --glass:#5cb2c3; --glass-soft:#163039; --sun:#f0a346; --sun-soft:#3a2a15;
+  --ok:#4fb57c; --warn:#e0b23c; --bad:#e86a57;
+  --nb:#3a4450; --nb-edge:#5b6775; --ground:#1a2129; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:13.5px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+button,input,select,textarea{font:inherit;color:inherit}
+.num,input[type=number]{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--glass);outline-offset:1px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--panel);border-bottom:1px solid var(--line);
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding-block:10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand small{color:var(--muted);font-size:12px}
+#projName{border:1px solid transparent;background:transparent;padding:3px 6px;border-radius:4px;min-width:0;width:220px;max-width:100%}
+#projName:hover,#projName:focus{border-color:var(--line);background:var(--sunk)}
+.top .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--panel);padding:6px 12px;border-radius:var(--r);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--glass);border-color:var(--glass);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.sm{padding:3px 9px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:default}
+#runStatus{font-size:12px;color:var(--muted);min-width:0}
+#runStatus.stale{color:var(--sun);font-weight:600}
+
+.app{display:grid;grid-template-columns:340px minmax(0,1fr);gap:0;min-height:calc(100% - 56px)}
+aside.inputs{border-right:1px solid var(--line);background:var(--panel);overflow:auto;max-height:calc(100vh - 56px);position:sticky;top:56px}
+main.work{min-width:0;display:flex;flex-direction:column;padding-block:12px;padding-left:16px;padding-right:max(16px,env(safe-area-inset-right,0px));gap:12px}
+
+details.step{border-bottom:1px solid var(--line)}
+details.step>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:11px 16px;font-weight:600}
+details.step>summary::-webkit-details-marker{display:none}
+details.step>summary .no{font-family:var(--f-num);font-size:11.5px;color:var(--glass);border:1px solid var(--glass);border-radius:50%;width:20px;height:20px;display:grid;place-items:center;flex:none}
+details.step>summary .sub{margin-left:auto;font-weight:400;color:var(--muted);font-size:12px;text-align:right}
+details.step[open]>summary{background:var(--sunk)}
+.stepbody{padding:10px 16px 16px;display:grid;gap:9px}
+.f{display:grid;gap:3px}
+.f>span{font-size:12px;color:var(--muted)}
+.f input,.f select,.f textarea{width:100%;border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:5px 7px;min-width:0}
+.f textarea{font-family:var(--f-num);font-size:12px;resize:vertical}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.hint b{color:var(--ink);font-weight:600}
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;padding:5px 4px;cursor:pointer;font-size:12.5px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--glass-soft);color:var(--glass);font-weight:600}
+.statline{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);background:var(--sunk);border-radius:4px;padding:7px 9px}
+.statline b{color:var(--ink);font-family:var(--f-num);font-weight:500}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+table.mini{width:100%;border-collapse:collapse;font-size:12.5px}
+table.mini th{font-weight:500;color:var(--muted);text-align:left;padding:3px 4px;border-bottom:1px solid var(--line);font-size:11.5px}
+table.mini td{padding:3px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.mini input,table.mini select{width:100%;border:1px solid var(--line);border-radius:3px;padding:2px 4px;background:var(--panel);min-width:0}
+table.mini td.x{width:24px;text-align:center}
+.xbtn{border:0;background:none;cursor:pointer;color:var(--muted);font-size:15px;line-height:1}
+.xbtn:hover{color:var(--bad)}
+tr.sel td{background:var(--glass-soft)}
+.fallback{border:1px dashed var(--sun);background:var(--sun-soft);border-radius:var(--r);padding:9px;display:grid;gap:7px}
+.fallback code{font-family:var(--f-num);font-size:11px;word-break:break-all;display:block;background:var(--panel);padding:6px;border-radius:4px;max-height:80px;overflow:auto}
+.tag{display:inline-block;font-size:11px;padding:0 6px;border-radius:9px;background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+
+/* 시점 바 */
+.timebar{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:9px 12px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.timebar label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.timebar input[type=date]{border:1px solid var(--line);border-radius:4px;padding:3px 6px;background:var(--panel)}
+.timebar input[type=range]{width:min(360px,60vw);accent-color:var(--sun)}
+.clock{font-family:var(--f-num);font-size:15px;font-weight:500;min-width:52px}
+.sunread{display:flex;gap:14px;font-size:12px;color:var(--muted)}
+.sunread b{font-family:var(--f-num);color:var(--ink);font-weight:500}
+.hitpill{font-size:12px;padding:2px 9px;border-radius:10px;background:var(--sunk);border:1px solid var(--line)}
+.hitpill.on{background:var(--sun-soft);border-color:var(--sun);color:var(--ink)}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;background:none;padding:8px 14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--glass);font-weight:600}
+.panel{display:block}
+.viewwrap{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);height:min(62vh,620px);min-height:340px;overflow:hidden}
+#view3d canvas,#planCanvas{display:block;width:100%;height:100%}
+.legend{position:absolute;left:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:6px 9px;font-size:11.5px;display:grid;gap:3px;opacity:.95}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.vtools{position:absolute;right:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.empty{padding:30px;color:var(--muted);text-align:center}
+
+/* 결과 */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:grid;gap:2px}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi b{font-family:var(--f-num);font-size:22px;font-weight:500;letter-spacing:-.02em}
+.kpi b small{font-size:12px;color:var(--muted);margin-left:3px;font-family:var(--f-ui)}
+.kpi em{font-style:normal;font-size:11.5px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:10px;min-width:0}
+.card h3{margin:0;font-size:14px;font-weight:600}
+.card .head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.scroll{overflow-x:auto}
+table.res{width:100%;border-collapse:collapse;font-size:12.5px;min-width:760px}
+table.res th{font-weight:500;color:var(--muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11.5px;white-space:nowrap}
+table.res th:first-child,table.res td:first-child{text-align:left}
+table.res td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+table.res td.t{font-family:var(--f-ui)}
+table.res tbody tr{cursor:pointer}
+table.res tbody tr:hover td{background:var(--sunk)}
+.pill{display:inline-block;font-family:var(--f-ui);font-size:11.5px;padding:1px 8px;border-radius:9px;border:1px solid}
+.pill.ok{color:var(--ok);border-color:var(--ok)}
+.pill.warn{color:var(--warn);border-color:var(--warn)}
+.pill.bad{color:#fff;background:var(--bad);border-color:var(--bad)}
+.sev{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.heatwrap{position:relative;width:100%;overflow-x:auto}
+#heat{display:block;width:100%;min-width:640px;height:300px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.bars{display:grid;gap:7px}
+.bar{display:grid;grid-template-columns:150px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:12.5px}
+.bar .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .lbl small{color:var(--muted)}
+.bar .trk{height:16px;background:var(--sunk);border-radius:3px;position:relative;overflow:hidden}
+.bar .trk i{position:absolute;left:0;top:0;bottom:0;background:var(--sun);border-radius:3px}
+.bar .trk i.mid{background:var(--sun);opacity:.38}
+.bar .v{font-family:var(--f-num);text-align:right;font-size:12px}
+.bar.cur .lbl{font-weight:600}
+.notes{margin:0;padding-left:18px;display:grid;gap:4px}
+.months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:140px}
+.months div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:100%;min-width:0}
+.months i{display:block;width:70%;background:var(--glass);border-radius:2px 2px 0 0;min-height:1px}
+.months span{font-size:10.5px;color:var(--muted);font-family:var(--f-num)}
+.months em{font-style:normal;font-size:10px;font-family:var(--f-num);color:var(--muted)}
+
+/* 리포트 미리보기 */
+.reportbox{background:#fff;color:#1b232c;border:1px solid var(--line);border-radius:var(--r);padding:28px clamp(16px,4vw,44px);overflow-x:auto}
+
+/* 도면 추적 창 */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(10,15,20,.55);display:grid;place-items:center;padding:16px}
+.modal .box{background:var(--panel);border-radius:8px;width:min(1100px,100%);height:min(780px,100%);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border:1px solid var(--line)}
+.modal .bar1{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line)}
+.modal .bar1 .sp{flex:1}
+.modal canvas{width:100%;height:100%;display:block;background:var(--sunk);cursor:crosshair}
+.modal .bar2{padding:8px 12px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12.5px}
+.modal input[type=number],.modal select{border:1px solid var(--line);border-radius:4px;padding:3px 6px;background:var(--panel)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;z-index:60;max-width:calc(100% - 32px)}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  aside.inputs{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line)}
+  main.work{padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .two{grid-template-columns:1fr}
+  .bar{grid-template-columns:110px minmax(0,1fr) 80px}
+  details.step>summary{padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .stepbody{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="top">
+  <div class="brand"><h1>건축 현휘 분석기</h1><small>고반사 유리 반사광 · 인접건물 영향</small></div>
+  <input id="projName" aria-label="프로젝트명" value="예시 프로젝트 · 잠실 업무시설">
+  <div class="actions">
+    <span id="runStatus">분석 준비</span>
+    <button class="btn primary" id="btnRun">분석 실행</button>
+    <button class="btn" id="btnSaveProj" title="입력값을 JSON 파일로 저장">프로젝트 저장</button>
+    <label class="btn" for="projFile" title="저장한 JSON 불러오기">불러오기</label>
+    <input type="file" id="projFile" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<div class="app">
+<aside class="inputs">
+  <details class="step" open>
+    <summary><span class="no">1</span>대지 위치<span class="sub" id="sumSite"></span></summary>
+    <div class="stepbody">
+      <label class="f"><span>주소</span><input id="addr" data-k="site.addr"></label>
+      <div class="g2">
+        <label class="f"><span>위도 (°N)</span><input type="number" step="0.0001" id="lat" data-k="site.lat"></label>
+        <label class="f"><span>경도 (°E)</span><input type="number" step="0.0001" id="lon" data-k="site.lon"></label>
+      </div>
+      <div class="g2">
+        <label class="f"><span>지역 바로 선택</span>
+          <select id="cityPreset"><option value="">선택…</option></select></label>
+        <label class="f"><span>분석 연도</span><input type="number" id="year" data-k="site.year"></label>
+      </div>
+      <button class="btn sm" id="btnGeocode">주소로 좌표 찾기 (VWorld)</button>
+      <p class="hint">시각은 한국표준시(KST) 기준입니다. 태양 고도·방위는 NOAA 천문 알고리즘으로 프로그램 안에서 계산합니다.</p>
+    </div>
+  </details>
+
+  <details class="step" open>
+    <summary><span class="no">2</span>건축물 형상<span class="sub" id="sumBld"></span></summary>
+    <div class="stepbody">
+      <div class="seg" role="group" aria-label="입력 방식">
+        <button data-imode="dim" aria-pressed="true">치수 입력</button>
+        <button data-imode="dxf" aria-pressed="false">DXF 도면</button>
+        <button data-imode="img" aria-pressed="false">도면 이미지</button>
+      </div>
+      <div class="g3">
+        <label class="f"><span>지상 층수</span><input type="number" min="1" id="floors" data-k="bld.floors"></label>
+        <label class="f"><span>층고 (m)</span><input type="number" step="0.1" id="fh" data-k="bld.fh"></label>
+        <label class="f"><span>연면적 (㎡)</span><input type="number" id="gfa" data-k="bld.gfa"></label>
+      </div>
+      <div class="g3">
+        <label class="f"><span>입면 형식</span>
+          <select id="bStyle" aria-label="입면 형식"><option value="cw">전면 커튼월</option><option value="band">연창 (띠창)</option><option value="punch">펀치창</option></select></label>
+        <label class="f"><span id="bFrontLbl">유리 비율 %</span><input type="number" min="0" max="100" step="5" id="bFrontW"></label>
+        <label class="f" id="bSideWrap"><span>옆면 유리 비율 %</span><input type="number" min="0" max="100" step="5" id="bSideW"></label>
+      </div>
+      <p class="hint" id="bStyleHint"></p>
+
+      <div data-ipanel="dim" class="stepbody" style="padding:0">
+        <label class="f"><span>평면 형태</span>
+          <select id="shape" data-k="bld.shape"><option value="rect">직사각형 (가로 × 세로)</option><option value="poly">다각형 (좌표 입력 / 도면에서 가져옴)</option></select></label>
+        <div class="g2" id="rectFields">
+          <label class="f"><span>가로 W (m)</span><input type="number" step="0.1" id="W" data-k="bld.W"></label>
+          <label class="f"><span>세로 D (m)</span><input type="number" step="0.1" id="D" data-k="bld.D"></label>
+        </div>
+        <label class="f" id="polyFields" hidden><span>외곽 좌표 (m, 한 줄에 x,y · 반시계/시계 무관)</span>
+          <textarea id="polyText" rows="5" data-k="bld.polyText"></textarea></label>
+        <button class="btn sm" id="btnFitGfa">연면적에 맞춰 평면 크기 조정</button>
+      </div>
+
+      <div data-ipanel="dxf" class="stepbody" style="padding:0" hidden>
+        <p class="hint">닫힌 폴리라인(LWPOLYLINE·POLYLINE), 이어진 LINE, 블록(INSERT)을 읽습니다. 도면 위쪽을 북쪽으로 보고, 진북은 아래 회전각으로 맞춥니다.</p>
+        <label class="f"><span>평면도 DXF</span><input type="file" id="dxfPlan" accept=".dxf"></label>
+        <div class="g2">
+          <label class="f"><span>외곽선 레이어</span><select id="dxfPlanLayer"></select></label>
+          <label class="f"><span>도면 단위</span><select id="dxfPlanUnit"><option value="auto">자동($INSUNITS)</option><option value="0.001">mm</option><option value="0.01">cm</option><option value="1">m</option></select></label>
+        </div>
+        <button class="btn sm" id="btnDxfPlan" disabled>평면 외곽 적용</button>
+        <hr style="border:0;border-top:1px solid var(--line);margin:4px 0;width:100%">
+        <label class="f"><span>입면도 DXF (유리 비율 산출)</span><input type="file" id="dxfElev" accept=".dxf"></label>
+        <div class="g2">
+          <label class="f"><span>입면 외곽 레이어</span><select id="dxfElevOut"></select></label>
+          <label class="f"><span>유리(창) 레이어</span><select id="dxfElevGlass"></select></label>
+        </div>
+        <div class="g2">
+          <label class="f"><span>적용할 입면</span><select id="dxfElevFac"></select></label>
+          <label class="f"><span>도면 단위</span><select id="dxfElevUnit"><option value="auto">자동</option><option value="0.001">mm</option><option value="0.01">cm</option><option value="1">m</option></select></label>
+        </div>
+        <label class="row" style="font-size:12.5px"><input type="checkbox" id="dxfElevH"> 입면 높이로 층고 보정</label>
+        <button class="btn sm" id="btnDxfElev" disabled>입면 유리 비율 적용</button>
+        <div class="statline" id="dxfInfo" hidden></div>
+      </div>
+
+      <div data-ipanel="img" class="stepbody" style="padding:0" hidden>
+        <p class="hint">평면도·입면도 이미지(JPG·PNG) 또는 PDF를 열고, 치수를 아는 두 점으로 축척을 맞춘 뒤 외곽선과 유리 영역을 클릭해 따냅니다.</p>
+        <label class="f"><span>도면 파일</span><input type="file" id="imgFile" accept="image/*,.pdf,application/pdf"></label>
+      </div>
+
+      <div class="g3">
+        <label class="f"><span>진북 회전 (°, 시계)</span><input type="number" step="1" id="rot" data-k="bld.rot"></label>
+        <label class="f"><span>배치 X (m, 동)</span><input type="number" step="1" id="ox" data-k="bld.ox"></label>
+        <label class="f"><span>배치 Y (m, 북)</span><input type="number" step="1" id="oy" data-k="bld.oy"></label>
+      </div>
+      <div class="statline" id="bldStats"></div>
+    </div>
+  </details>
+
+  <details class="step" open>
+    <summary><span class="no">3</span>유리 사양<span class="sub" id="sumGlass"></span></summary>
+    <div class="stepbody">
+      <table class="mini" id="glassTbl"><thead><tr><th>유리 종류</th><th style="width:78px">외부 반사율 %</th><th class="x"></th></tr></thead><tbody></tbody></table>
+      <button class="btn sm" id="btnAddGlass">유리 추가</button>
+      <p class="hint">반사율은 수직 입사 기준 가시광 외부 반사율입니다. 기본값은 유형별 일반 범위이므로 실제 제품 성적서 값으로 바꿔 쓰세요. 비스듬히 입사할수록 반사율이 커지는 효과는 자동 반영됩니다.</p>
+      <div class="g3">
+        <label class="f"><span>적용 유리</span><select id="defGlass"></select></label>
+        <label class="f"><span>유리 비율 %</span><input type="number" min="0" max="100" id="defWwr"></label>
+        <label class="f"><span>유리 시작 높이 m</span><input type="number" step="0.5" id="glassZ0" data-k="bld.glassZ0"></label>
+      </div>
+      <button class="btn sm" id="btnApplyAll">모든 입면에 적용</button>
+      <table class="mini" id="facTbl"><thead><tr><th>입면(방위)</th><th>길이 m</th><th style="width:56px">유리 %</th><th>유리</th></tr></thead><tbody></tbody></table>
+    </div>
+  </details>
+
+  <details class="step" open>
+    <summary><span class="no">4</span>인접 건물<span class="sub" id="sumNb"></span></summary>
+    <div class="stepbody">
+      <div class="g2">
+        <label class="f"><span>VWorld 인증키</span><input id="vwKey" data-k="vw.key" autocomplete="off" placeholder="발급받은 키"></label>
+        <label class="f"><span>인증 도메인</span><input id="vwDomain" data-k="vw.domain" placeholder="키 등록 URL"></label>
+      </div>
+      <div class="g3">
+        <label class="f"><span>검색 반경 m</span><input type="number" id="vwRadius" data-k="vw.radius"></label>
+        <label class="f"><span>데이터 레이어</span><input id="vwLayer" data-k="vw.layer"></label>
+        <label class="f"><span>층당 높이 가정</span><input type="number" step="0.1" id="vwFh" data-k="vw.fh"></label>
+      </div>
+      <button class="btn sm primary" id="btnVworld">VWorld에서 주변 건물 불러오기</button>
+      <div class="fallback" id="vwFallback" hidden>
+        <p class="hint" id="vwMsg"></p>
+        <code id="vwUrl"></code>
+        <div class="row"><button class="btn sm" id="btnCopyUrl">주소 복사</button></div>
+        <label class="f"><span>브라우저에 나온 결과 전체를 붙여넣기</span><textarea id="vwPaste" rows="4" placeholder='{"response":{"status":"OK", ...'></textarea></label>
+        <button class="btn sm" id="btnVwPaste">붙여넣은 결과 반영</button>
+      </div>
+      <label class="f"><span>또는 GeoJSON 파일 (EPSG:4326)</span><input type="file" id="geoFile" accept=".json,.geojson"></label>
+      <table class="mini" id="nbTbl"><thead><tr><th>건물</th><th style="width:52px">층수</th><th style="width:62px">높이 m</th><th class="x"></th></tr></thead><tbody></tbody></table>
+      <div class="row">
+        <button class="btn sm" id="btnDrawNb">배치도에서 직접 그리기</button>
+        <button class="btn sm" id="btnClearNb">모두 지우기</button>
+      </div>
+    </div>
+  </details>
+
+  <details class="step">
+    <summary><span class="no">5</span>분석 조건<span class="sub" id="sumCfg"></span></summary>
+    <div class="stepbody">
+      <div class="g2">
+        <label class="f"><span>시작 월</span><input type="number" min="1" max="12" data-k="cfg.m0"></label>
+        <label class="f"><span>종료 월</span><input type="number" min="1" max="12" data-k="cfg.m1"></label>
+      </div>
+      <div class="g2">
+        <label class="f"><span>날짜 간격 (일)</span><select data-k="cfg.dayStep"><option value="1">1일 (정밀)</option><option value="2">2일</option><option value="3">3일</option><option value="7">7일 (빠름)</option></select></label>
+        <label class="f"><span>시간 간격</span><select data-k="cfg.minStep"><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option><option value="30">30분</option></select></label>
+      </div>
+      <div class="g2">
+        <label class="f"><span>최대 영향 거리 m</span><input type="number" data-k="cfg.maxDist"></label>
+        <label class="f"><span>최소 영향 면적 ㎡</span><input type="number" step="0.5" data-k="cfg.minArea"></label>
+      </div>
+      <div class="g2">
+        <label class="f"><span>참고 기준 · 1일 (분)</span><input type="number" data-k="cfg.dailyLim"></label>
+        <label class="f"><span>참고 기준 · 연간 (시간)</span><input type="number" data-k="cfg.annualLim"></label>
+      </div>
+      <div class="g2">
+        <label class="f"><span>반사 강도 '중' 이상 W/㎡</span><input type="number" data-k="cfg.iLow"></label>
+        <label class="f"><span>반사 강도 '강' 이상 W/㎡</span><input type="number" data-k="cfg.iHigh"></label>
+      </div>
+      <p class="hint">기준 초과 판정에는 반사 세기가 '중' 이상(기본 100 W/㎡)인 반사만 셉니다. 세기 = 맑은 날 직달일사 × 입사각별 유리 반사율이라, 반사율이 낮은 유리일수록 같은 경로의 반사도 약하게 계산됩니다. 참고 기준 30분/일 · 30시간/년은 독일 LAI 빛공해 지침의 반사광 눈부심 판단 관행을 따른 기본값입니다. 국내 법정 기준이 아니므로 심의 조건에 맞게 조정하세요.</p>
+    </div>
+  </details>
+</aside>
+
+<main class="work">
+  <div class="timebar">
+    <label>날짜 <input type="date" id="tDate"></label>
+    <label>시각 <input type="range" id="tMin" min="300" max="1200" step="5"></label>
+    <span class="clock" id="tClock">--:--</span>
+    <button class="btn sm" id="btnPlay" aria-pressed="false">하루 재생</button>
+    <div class="sunread">
+      <span>태양고도 <b id="rAlt">-</b></span><span>방위 <b id="rAz">-</b></span><span>직달일사 <b id="rDni">-</b></span>
+    </div>
+    <span class="hitpill" id="hitPill">반사광 없음</span>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="t3d" aria-selected="true">3D 모델</button>
+    <button role="tab" data-tab="tplan" aria-selected="false">배치도</button>
+    <button role="tab" data-tab="tres" aria-selected="false">분석 결과</button>
+    <button role="tab" data-tab="trep" aria-selected="false">리포트</button>
+  </div>
+
+  <section class="panel" id="t3d">
+    <div class="viewwrap">
+      <div id="view3d" style="width:100%;height:100%"></div>
+      <div class="vtools"><button class="btn sm" id="btnView3dReset">시점 초기화</button><button class="btn sm" id="btnView3dTop">위에서 보기</button></div>
+      <div class="legend">
+        <div><i style="background:var(--glass)"></i>검토 건물(유리 입면)</div>
+        <div><i style="background:var(--sun)"></i>반사광 도달 영역</div>
+        <div><i style="background:var(--bad)"></i>참고 기준 초과 건물</div>
+        <div><i style="background:var(--warn)"></i>영향 있음(기준 이내)</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tplan" hidden>
+    <div class="viewwrap">
+      <canvas id="planCanvas"></canvas>
+      <div class="vtools">
+        <span class="tag" id="drawTag" hidden>클릭해 꼭짓점 추가 · 첫 점 클릭으로 닫기</span>
+        <button class="btn sm" id="btnDrawDone" hidden>그리기 완료</button>
+        <button class="btn sm" id="btnDrawCancel" hidden>취소</button>
+        <button class="btn sm" id="btnPlanFit">전체 보기</button>
+      </div>
+      <div class="legend">
+        <div>휠: 확대/축소 · 끌기: 이동 · 건물 클릭: 선택</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tres" hidden>
+    <div id="resEmpty" class="card"><p class="hint">분석 실행을 누르면 결과가 여기에 표시됩니다.</p></div>
+    <div id="resBody" hidden style="display:grid;gap:12px">
+      <div class="kpis" id="kpis"></div>
+      <div class="card">
+        <div class="head"><h3>인접 건물별 현휘 영향</h3><span class="hint">행을 누르면 해당 건물의 발생 분포와 대표 시점을 봅니다</span></div>
+        <div class="scroll"><table class="res" id="resTbl"></table></div>
+      </div>
+      <div class="card">
+        <div class="head"><h3>연중 현휘 발생 분포</h3>
+          <label class="f" style="grid-auto-flow:column;align-items:center;gap:6px"><span>대상</span><select id="heatSel"></select></label></div>
+        <div class="heatwrap"><canvas id="heat"></canvas></div>
+        <div class="row hint" id="heatLegend"></div>
+      </div>
+      <div class="two">
+        <div class="card">
+          <div class="head"><h3>유리 반사율별 비교</h3><span class="hint">같은 형상, 유리만 교체</span></div>
+          <div class="bars" id="cmpBars"></div>
+          <p class="hint" id="cmpNote"></p>
+        </div>
+        <div class="card">
+          <div class="head"><h3>월별 현휘 시간</h3><span class="hint" id="monthSel"></span></div>
+          <div class="months" id="months"></div>
+        </div>
+      </div>
+      <div class="card"><h3>검토 의견</h3><ul class="notes" id="notes"></ul></div>
+    </div>
+  </section>
+
+  <section class="panel" id="trep" hidden>
+    <div class="card">
+      <div class="g3">
+        <label class="f"><span>작성 회사</span><input id="repCo" data-k="rep.co" placeholder="예: ○○유리 특판영업팀"></label>
+        <label class="f"><span>작성자</span><input id="repBy" data-k="rep.by"></label>
+        <label class="f"><span>제출처</span><input id="repTo" data-k="rep.to" placeholder="예: ○○건설 설계팀"></label>
+      </div>
+      <div class="row">
+        <label class="f" style="grid-auto-flow:column;align-items:center;gap:6px"><span>검토서 범위</span><select id="repScope"><option value="all">전체 요약 + 동별 상세</option></select></label>
+        <button class="btn primary" id="btnRepSave">검토서 저장 (HTML)</button>
+        <button class="btn" id="btnCsv">시각별 데이터 저장 (CSV)</button>
+        <span class="hint">저장한 HTML은 브라우저로 열어 인쇄하거나 PDF로 저장할 수 있습니다.</span>
+      </div>
+    </div>
+    <div class="reportbox" id="repView"><p class="hint">분석을 실행하면 리포트 미리보기가 표시됩니다.</p></div>
+  </section>
+</main>
+</div>
+
+<div class="modal" id="tracer" hidden>
+  <div class="box">
+    <div class="bar1">
+      <div class="seg" role="group" aria-label="추적 도구">
+        <button data-tr="pan" aria-pressed="false">이동</button>
+        <button data-tr="scale" aria-pressed="true">① 축척</button>
+        <button data-tr="outline" aria-pressed="false">② 외곽선</button>
+        <button data-tr="glass" aria-pressed="false">③ 유리 영역</button>
+      </div>
+      <label class="hint">기준 길이 <input type="number" id="trLen" value="10000" style="width:84px"> mm</label>
+      <select id="trPage" hidden></select>
+      <button class="btn sm" id="trUndo">되돌리기</button>
+      <button class="btn sm" id="trClear">지우기</button>
+      <span class="sp"></span>
+      <button class="btn sm" id="trClose">닫기</button>
+    </div>
+    <canvas id="trCanvas"></canvas>
+    <div class="bar2">
+      <span id="trStat" class="hint">두 점을 클릭해 축척을 지정하세요.</span>
+      <span class="sp" style="flex:1"></span>
+      <label>용도 <select id="trPurpose"><option value="plan">평면도 → 건물 외곽</option><option value="elev">입면도 → 유리 비율</option></select></label>
+      <select id="trFac" hidden></select>
+      <label class="row" id="trHwrap" hidden><input type="checkbox" id="trH"> 입면 높이로 층고 보정</label>
+      <button class="btn primary sm" id="trApply">적용</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+/* ===== 계산 엔진 (DOM 비의존) ===== */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+
+/* NOAA 태양위치 알고리즘 (KASI 천문력과 0.01° 수준 일치) */
+function sunPosition(utcMs, lat, lon) {
+  const jd = utcMs / 864e5 + 2440587.5, T = (jd - 2451545) / 36525;
+  let L0 = (280.46646 + T * (36000.76983 + T * 0.0003032)) % 360; if (L0 < 0) L0 += 360;
+  const M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+  const e = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+  const Mr = M * D2R;
+  const C = Math.sin(Mr) * (1.914602 - T * (0.004817 + 0.000014 * T)) + Math.sin(2 * Mr) * (0.019993 - 0.000101 * T) + Math.sin(3 * Mr) * 0.000289;
+  const omega = 125.04 - 1934.136 * T;
+  const lam = (L0 + C - 0.00569 - 0.00478 * Math.sin(omega * D2R)) * D2R;
+  const eps0 = 23 + (26 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60) / 60;
+  const eps = (eps0 + 0.00256 * Math.cos(omega * D2R)) * D2R;
+  const decl = Math.asin(Math.sin(eps) * Math.sin(lam));
+  const y = Math.tan(eps / 2) ** 2, L0r = L0 * D2R;
+  const eot = 4 * R2D * (y * Math.sin(2 * L0r) - 2 * e * Math.sin(Mr) + 4 * e * y * Math.sin(Mr) * Math.cos(2 * L0r) - 0.5 * y * y * Math.sin(4 * L0r) - 1.25 * e * e * Math.sin(2 * Mr));
+  const minUTC = ((utcMs / 6e4) % 1440 + 1440) % 1440;
+  let tst = (minUTC + eot + 4 * lon) % 1440; if (tst < 0) tst += 1440;
+  const har = (tst / 4 - 180) * D2R, latr = lat * D2R;
+  let cz = Math.sin(latr) * Math.sin(decl) + Math.cos(latr) * Math.cos(decl) * Math.cos(har);
+  cz = Math.max(-1, Math.min(1, cz));
+  let alt = 90 - Math.acos(cz) * R2D;
+  if (alt > -0.575 && alt < 85) {
+    const te = Math.tan(alt * D2R);
+    const ref = alt > 5 ? 58.1 / te - 0.07 / te ** 3 + 0.000086 / te ** 5 : 1735 + alt * (-518.2 + alt * (103.4 + alt * (-12.79 + alt * 0.711)));
+    alt += ref / 3600;
+  }
+  let az = Math.atan2(Math.sin(har), Math.cos(har) * Math.sin(latr) - Math.tan(decl) * Math.cos(latr)) * R2D + 180;
+  az = (az + 360) % 360;
+  return { alt, az, decl: decl * R2D };
+}
+function kstToUtc(year, doy, minute) { return Date.UTC(year, 0, 1) + (doy - 1) * 864e5 + (minute - 540) * 6e4; }
+function sunVec(alt, az) { const a = alt * D2R, z = az * D2R; return [Math.sin(z) * Math.cos(a), Math.cos(z) * Math.cos(a), Math.sin(a)]; }
+/* 맑은 날 직달일사 (Meinel + Kasten-Young 대기질량) */
+function clearDNI(alt) {
+  if (alt <= 0) return 0;
+  const zen = 90 - alt;
+  const am = 1 / (Math.cos(zen * D2R) + 0.50572 * Math.pow(96.07995 - zen, -1.6364));
+  return 1361 * Math.pow(0.7, Math.pow(am, 0.678));
+}
+/* 입사각에 따른 유리 반사율 (Schlick 근사) */
+function fresnelR(cosI, R0) { const k = 1 - Math.max(0, Math.min(1, cosI)); return R0 + (1 - R0) * k * k * k * k * k; }
+
+/* ---- 2D/3D 기하 ---- */
+function polyArea(p) { let a = 0; for (let i = 0, n = p.length; i < n; i++) { const q = p[i], r = p[(i + 1) % n]; a += q[0] * r[1] - r[0] * q[1]; } return a / 2; }
+function ensureCCW(p) { return polyArea(p) < 0 ? p.slice().reverse() : p.slice(); }
+function polyCentroid(p) {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0, n = p.length; i < n; i++) { const q = p[i], r = p[(i + 1) % n], f = q[0] * r[1] - r[0] * q[1]; a += f; cx += (q[0] + r[0]) * f; cy += (q[1] + r[1]) * f; }
+  if (Math.abs(a) < 1e-9) { let x = 0, y = 0; p.forEach(v => { x += v[0]; y += v[1]; }); return [x / p.length, y / p.length]; }
+  return [cx / (3 * a), cy / (3 * a)];
+}
+function pip(pt, poly) {
+  let c = false; const x = pt[0], y = pt[1];
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+function bboxOf(p) { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; p.forEach(v => { a = Math.min(a, v[0]); b = Math.min(b, v[1]); c = Math.max(c, v[0]); d = Math.max(d, v[1]); }); return [a, b, c, d]; }
+/* 3D 다각형을 수직면 (P-Q)·m >= eps 쪽으로 자르기 */
+function clipHalf3(poly, Q, m, eps) {
+  const out = [], f = P => (P[0] - Q[0]) * m[0] + (P[1] - Q[1]) * m[1] - eps;
+  for (let i = 0; i < poly.length; i++) {
+    const A = poly[i], B = poly[(i + 1) % poly.length], fa = f(A), fb = f(B);
+    if (fa >= 0) out.push(A);
+    if ((fa >= 0) !== (fb >= 0)) { const t = fa / (fa - fb); out.push([A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1]), A[2] + t * (B[2] - A[2])]); }
+  }
+  return out;
+}
+function clipEdge(poly, inside, inter) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const A = poly[i], B = poly[(i + 1) % poly.length], ia = inside(A), ib = inside(B);
+    if (ia) out.push(A);
+    if (ia !== ib) out.push(inter(A, B));
+  }
+  return out;
+}
+function clipRect(p, x0, x1, y0, y1) {
+  const lx = (A, B, x) => { const t = (x - A[0]) / (B[0] - A[0]); return [x, A[1] + t * (B[1] - A[1])]; };
+  const ly = (A, B, y) => { const t = (y - A[1]) / (B[1] - A[1]); return [A[0] + t * (B[0] - A[0]), y]; };
+  p = clipEdge(p, v => v[0] >= x0, (A, B) => lx(A, B, x0)); if (p.length < 3) return [];
+  p = clipEdge(p, v => v[0] <= x1, (A, B) => lx(A, B, x1)); if (p.length < 3) return [];
+  p = clipEdge(p, v => v[1] >= y0, (A, B) => ly(A, B, y0)); if (p.length < 3) return [];
+  p = clipEdge(p, v => v[1] <= y1, (A, B) => ly(A, B, y1));
+  return p.length < 3 ? [] : p;
+}
+/* 선분(P + t·D, 0<t<tmax)이 각기둥 건물에 막히는지 */
+function segHitsPrism(P, D, tmax, ob) {
+  const ex = P[0] + D[0] * tmax, ey = P[1] + D[1] * tmax, ez = P[2] + D[2] * tmax, bb = ob.bb;
+  if (Math.max(P[0], ex) < bb[0] || Math.min(P[0], ex) > bb[2] || Math.max(P[1], ey) < bb[1] || Math.min(P[1], ey) > bb[3]) return false;
+  if (Math.min(P[2], ez) > ob.h) return false;
+  const poly = ob.poly, n = poly.length, eps = 0.05;
+  for (let i = 0; i < n; i++) {
+    const E1 = poly[i], E2 = poly[(i + 1) % n], exx = E2[0] - E1[0], eyy = E2[1] - E1[1];
+    const den = D[0] * eyy - D[1] * exx; if (Math.abs(den) < 1e-12) continue;
+    const wx = E1[0] - P[0], wy = E1[1] - P[1];
+    const t = (wx * eyy - wy * exx) / den, u = (wx * D[1] - wy * D[0]) / den;
+    if (t > eps && t < tmax && u >= 0 && u <= 1) { const z = P[2] + t * D[2]; if (z >= 0 && z <= ob.h) return true; }
+  }
+  if (Math.abs(D[2]) > 1e-9) {
+    const t = (ob.h - P[2]) / D[2];
+    if (t > eps && t < tmax && pip([P[0] + t * D[0], P[1] + t * D[1]], poly)) return true;
+  }
+  return false;
+}
+function rayBlocked(S, dir, len, obs, excludeRec) {
+  for (const ob of obs) { if (ob.rec === excludeRec) continue; if (segHitsPrism(S, dir, len, ob)) return true; }
+  return false;
+}
+function sunBlocked(S, s, obs, maxH) {
+  if (s[2] <= 0) return true;
+  const tmax = Math.min(4000, (maxH - S[2]) / s[2]); if (tmax <= 0) return false;
+  for (const ob of obs) if (segHitsPrism(S, s, tmax, ob)) return true;
+  return false;
+}
+
+/* ---- 분석 장면 구성 ----
+   main: {poly(CCW), H, z0, facProps:[{wwr(0~1), R0(0~1)}]}
+   neighbors: [{poly, h}]  */
+function buildScene(main, neighbors, maxDist) {
+  const fp = main.poly, facades = [];
+  for (let i = 0; i < fp.length; i++) {
+    const A = fp[i], B = fp[(i + 1) % fp.length], dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+    if (L < 0.2) continue;
+    const t = [dx / L, dy / L], n = [t[1], -t[0]];
+    const pr = main.facProps[i] || { wwr: 0.7, R0: 0.3 };
+    facades.push({ idx: i, A, B, L, t, n, z0: main.z0, z1: main.H, wwr: pr.wwr, R0: pr.R0, az: (Math.atan2(n[0], n[1]) * R2D + 360) % 360, cands: [] });
+  }
+  const walls = [], obs = [];
+  obs.push({ rec: -1, poly: fp, h: main.H, bb: bboxOf(fp) });
+  neighbors.forEach((nb, ri) => {
+    const p = ensureCCW(nb.poly);
+    obs.push({ rec: ri, poly: p, h: nb.h, bb: bboxOf(p) });
+    for (let i = 0; i < p.length; i++) {
+      const A = p[i], B = p[(i + 1) % p.length], dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+      if (L < 0.2) continue;
+      const t = [dx / L, dy / L];
+      walls.push({ rec: ri, Q: A, B, t, m: [t[1], -t[0]], L, h: nb.h });
+    }
+  });
+  let maxH = main.H; neighbors.forEach(n => { maxH = Math.max(maxH, n.h); });
+  for (const F of facades) {
+    const fm = [(F.A[0] + F.B[0]) / 2, (F.A[1] + F.B[1]) / 2];
+    walls.forEach((W, wi) => {
+      const front1 = Math.max((W.Q[0] - F.A[0]) * F.n[0] + (W.Q[1] - F.A[1]) * F.n[1], (W.B[0] - F.A[0]) * F.n[0] + (W.B[1] - F.A[1]) * F.n[1]);
+      const front2 = Math.max((F.A[0] - W.Q[0]) * W.m[0] + (F.A[1] - W.Q[1]) * W.m[1], (F.B[0] - W.Q[0]) * W.m[0] + (F.B[1] - W.Q[1]) * W.m[1]);
+      if (front1 < 0.1 || front2 < 0.1) return;
+      const wm = [(W.Q[0] + W.B[0]) / 2, (W.Q[1] + W.B[1]) / 2];
+      if (Math.hypot(wm[0] - fm[0], wm[1] - fm[1]) - (F.L + W.L) / 2 > maxDist) return;
+      F.cands.push(wi);
+    });
+  }
+  return { facades, walls, obs, maxH };
+}
+
+/* 한 시점, 한 입면의 반사광이 닿는 인접건물 벽면 */
+function facadeHits(sc, F, s, sn, maxDist, geom) {
+  const r = [-s[0] + 2 * sn * F.n[0], -s[1] + 2 * sn * F.n[1], -s[2]];
+  const out = [];
+  const src = [[F.A[0], F.A[1], F.z0], [F.B[0], F.B[1], F.z0], [F.B[0], F.B[1], F.z1], [F.A[0], F.A[1], F.z1]];
+  for (const wi of F.cands) {
+    const W = sc.walls[wi];
+    const den = r[0] * W.m[0] + r[1] * W.m[1];
+    if (den > -1e-4) continue;
+    const poly = clipHalf3(src, W.Q, W.m, 0.01); if (poly.length < 3) continue;
+    const uv = []; let tmin = Infinity;
+    for (const P of poly) {
+      const tau = ((W.Q[0] - P[0]) * W.m[0] + (W.Q[1] - P[1]) * W.m[1]) / den;
+      if (tau < tmin) tmin = tau;
+      const X0 = P[0] + tau * r[0], X1 = P[1] + tau * r[1], Z = P[2] + tau * r[2];
+      uv.push([(X0 - W.Q[0]) * W.t[0] + (X1 - W.Q[1]) * W.t[1], Z]);
+    }
+    if (tmin > maxDist) continue;
+    const c = clipRect(uv, 0, W.L, 0, W.h); if (c.length < 3) continue;
+    const area = Math.abs(polyArea(c)); if (area < 0.05) continue;
+    const cen = polyCentroid(c), samp = [cen], stepK = Math.max(1, Math.floor(c.length / 4));
+    for (let k = 0; k < c.length && samp.length < 5; k += stepK) samp.push([(cen[0] + c[k][0]) / 2, (cen[1] + c[k][1]) / 2]);
+    let vis = 0, sS = null, sX = null;
+    for (const uvp of samp) {
+      const X = [W.Q[0] + uvp[0] * W.t[0], W.Q[1] + uvp[0] * W.t[1], uvp[1]];
+      const lam = ((X[0] - F.A[0]) * F.n[0] + (X[1] - F.A[1]) * F.n[1]) / sn;
+      const S = [X[0] - lam * r[0], X[1] - lam * r[1], X[2] - lam * r[2]];
+      let ok = !rayBlocked(S, r, lam - 0.05, sc.obs, W.rec);
+      if (ok) ok = !sunBlocked(S, s, sc.obs, sc.maxH);
+      if (ok) { vis++; if (!sS) { sS = S; sX = X; } }
+    }
+    vis /= samp.length; if (vis <= 0) continue;
+    const h = { w: wi, rec: W.rec, area, vis, dist: tmin };
+    if (geom) { h.poly = c; h.S = sS; h.X = sX; h.r = r; }
+    out.push(h);
+  }
+  return out;
+}
+
+/* 한 시점 전체 (시각화용) */
+function hitsAt(sc, P, doy, minute, geom) {
+  const sp = sunPosition(kstToUtc(P.year, doy, minute), P.lat, P.lon);
+  const res = { sun: sp, s: sunVec(sp.alt, sp.az), dni: clearDNI(sp.alt), hits: [] };
+  if (sp.alt < 0.5) return res;
+  for (const F of sc.facades) {
+    const sn = res.s[0] * F.n[0] + res.s[1] * F.n[1];
+    if (sn < 0.02 || !F.cands.length) continue;
+    // 입면 자체가 일사를 받는지(입면 중앙 상단부 기준) — 차폐는 facadeHits 내부 표본에서 판정
+    facadeHits(sc, F, res.s, sn, P.maxDist, geom).forEach(h => { h.f = F.idx; h.cos = sn; res.hits.push(h); });
+  }
+  return res;
+}
+
+/* 하루 분석 → 이벤트 누적 */
+function analyzeDay(sc, P, doy, ev) {
+  for (let m = P.minStart; m <= P.minEnd; m += P.minStep) {
+    const sp = sunPosition(kstToUtc(P.year, doy, m), P.lat, P.lon);
+    if (sp.alt < 0.5) continue;
+    const s = sunVec(sp.alt, sp.az), dni = clearDNI(sp.alt);
+    for (const F of sc.facades) {
+      const sn = s[0] * F.n[0] + s[1] * F.n[1];
+      if (sn < 0.02 || !F.cands.length) continue;
+      const hs = facadeHits(sc, F, s, sn, P.maxDist, false);
+      for (const h of hs) ev.push({ r: h.rec, d: doy, m, f: F.idx, c: sn, n: dni, a: h.area * h.vis, alt: sp.alt, az: sp.az });
+    }
+  }
+}
+
+/* 이벤트 집계. R0map: 입면 idx → 반사율(0~1). override 지정 시 전 입면 동일 반사율 */
+function aggregate(ev, nRec, P, R0map, override, wwrMap) {
+  const keyMap = new Map();
+  for (const e of ev) {
+    const R0 = override != null ? override : (R0map[e.f] != null ? R0map[e.f] : 0.3);
+    const I = fresnelR(e.c, R0) * e.n;
+    const k = e.r * 1e6 + e.d * 1440 + e.m;
+    const a = e.a * (wwrMap && wwrMap[e.f] != null ? wwrMap[e.f] : 1);
+    let o = keyMap.get(k);
+    if (!o) { o = { r: e.r, d: e.d, m: e.m, a: 0, I: 0, f: e.f, fa: 0, alt: e.alt, az: e.az }; keyMap.set(k, o); }
+    o.a += a; if (I > o.I) o.I = I;
+    if (a > o.fa) { o.fa = a; o.f = e.f; }
+  }
+  const rec = Array.from({ length: nRec }, () => ({ steps: 0, strong: 0, mid: 0, days: new Map(), midDays: new Map(), first: null, last: null, minM: 1e9, maxM: -1, fac: {}, maxI: 0, maxA: 0, month: new Array(12).fill(0), peak: null }));
+  const grid = new Map();
+  const year = P.year;
+  for (const o of keyMap.values()) {
+    if (o.a < P.minArea) continue;
+    const R = rec[o.r]; if (!R) continue;
+    R.steps++;
+    if (o.I >= P.iHigh) R.strong++;
+    if (o.I >= P.iLow) { R.mid++; R.midDays.set(o.d, (R.midDays.get(o.d) || 0) + P.minStep); }
+    R.days.set(o.d, (R.days.get(o.d) || 0) + P.minStep);
+    if (R.first == null || o.d < R.first) R.first = o.d;
+    if (R.last == null || o.d > R.last) R.last = o.d;
+    R.minM = Math.min(R.minM, o.m); R.maxM = Math.max(R.maxM, o.m);
+    R.fac[o.f] = (R.fac[o.f] || 0) + 1;
+    if (o.I > R.maxI) { R.maxI = o.I; R.peak = { d: o.d, m: o.m }; }
+    R.maxA = Math.max(R.maxA, o.a);
+    const mo = new Date(Date.UTC(year, 0, o.d)).getUTCMonth();
+    R.month[mo] += P.minStep * P.dayStep;
+    const gk = o.d * 1440 + o.m;
+    const g = grid.get(gk); if (!g || g.I < o.I) grid.set(gk, { I: o.I, r: o.r });
+  }
+  rec.forEach(R => {
+    R.hours = R.steps * P.minStep * P.dayStep / 60;
+    R.strongH = R.strong * P.minStep * P.dayStep / 60;
+    R.midH = R.mid * P.minStep * P.dayStep / 60;
+    R.nDays = R.days.size * P.dayStep;
+    R.maxDaily = 0; R.maxDay = null;
+    R.days.forEach((v, d) => { if (v > R.maxDaily) { R.maxDaily = v; R.maxDay = d; } });
+    R.nDaysMid = R.midDays.size * P.dayStep; R.maxDailyMid = 0; R.maxDayMid = null;
+    R.midDays.forEach((v, d) => { if (v > R.maxDailyMid) { R.maxDailyMid = v; R.maxDayMid = d; } });
+  });
+  return { rec, grid, keyMap };
+}
+
+if (typeof module !== 'undefined') module.exports = { sunPosition, kstToUtc, sunVec, clearDNI, fresnelR, buildScene, hitsAt, analyzeDay, aggregate, polyArea, ensureCCW, clipRect };
+
+</script>
+<script>
+/* ===== 화면 ===== */
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 0) => (v == null || !isFinite(v)) ? '-' : Number(v).toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+const dirLabel = az => DIRS[Math.round(((az % 360) + 360) % 360 / 45) % 8];
+const hhmm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.round(m % 60)).padStart(2, '0');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function doyOf(y, m, d) { return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 864e5) + 1; }
+function dateOf(y, doy) { const t = new Date(Date.UTC(y, 0, doy)); return { m: t.getUTCMonth() + 1, d: t.getUTCDate() }; }
+function mdStr(y, doy) { const o = dateOf(y, doy); return o.m + '/' + o.d; }
+function daysInYear(y) { return doyOf(y, 12, 31); }
+
+function rectPoly(cx, cy, w, d, rot) {
+  return [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].map(p => { const q = rotPt(p, rot); return [cx + q[0], cy + q[1]]; });
+}
+function rotPt(p, deg) { const r = deg * D2R; return [p[0] * Math.cos(r) + p[1] * Math.sin(r), -p[0] * Math.sin(r) + p[1] * Math.cos(r)]; }
+
+const CITIES = [['서울 (시청)', 37.5665, 126.978], ['부산', 35.1796, 129.0756], ['인천', 37.4563, 126.7052], ['대구', 35.8714, 128.6014], ['대전', 36.3504, 127.3845], ['광주', 35.1595, 126.8526], ['울산', 35.5384, 129.3114], ['세종', 36.48, 127.289], ['수원', 37.2636, 127.0286], ['창원', 35.2281, 128.6811], ['청주', 36.6424, 127.489], ['전주', 35.8242, 127.148], ['제주', 33.4996, 126.5312], ['강릉', 37.7519, 128.8761]];
+
+const DEFAULT = () => ({
+  v: 1,
+  site: { addr: '서울특별시 송파구 올림픽로 300', lat: 37.5125, lon: 127.1025, year: 2026 },
+  bld: { floors: 25, fh: 3.9, gfa: 25200, shape: 'rect', W: 42, D: 24, polyText: '', rot: 20, ox: 0, oy: 0, glassZ0: 0 },
+  glasses: [
+    { id: 'g1', name: '저반사 로이 복층', R: 7 },
+    { id: 'g2', name: '일반 투명 복층', R: 14 },
+    { id: 'g3', name: '일반 로이 복층', R: 12 },
+    { id: 'g4', name: '열반사 (중반사)', R: 22 },
+    { id: 'g5', name: '고반사 실버', R: 32 },
+    { id: 'g6', name: '고반사 미러', R: 42 }
+  ],
+  defGlass: 'g5', defWwr: 70,
+  fac: [],
+  nb: [
+    ['예시 A동', -22, 82, 34, 15, 0, 20], ['예시 B동', 72, 42, 26, 24, 10, 15], ['예시 C동', 62, -76, 42, 14, -15, 25],
+    ['예시 D동', -86, -30, 20, 40, 5, 12], ['예시 E동', -72, 76, 22, 22, 0, 10], ['예시 F동', 12, -98, 30, 18, 0, 8]
+  ].map((a, i) => ({ id: 'n' + i, name: a[0], poly: rectPoly(a[1], a[2], a[3], a[4], a[5]), floors: a[6], h: a[6] * 3, src: 'sample' })),
+  vw: { key: '', domain: '', radius: 300, layer: 'LT_C_SPBD', fh: 3.0 },
+  cfg: { m0: 1, m1: 12, dayStep: 1, minStep: 10, maxDist: 500, minArea: 1, dailyLim: 30, annualLim: 30, iLow: 100, iHigh: 200 },
+  rep: { co: '', by: '', to: '' },
+  t: { doy: doyOf(2026, 10, 30), min: 600 }
+});
+
+let S = DEFAULT();
+try { const raw = localStorage.getItem('glare-analyzer-v1'); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1) S = Object.assign(DEFAULT(), o); } } catch (e) { }
+function save() { try { localStorage.setItem('glare-analyzer-v1', JSON.stringify(S)); } catch (e) { } }
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 3200); }
+function getPath(o, k) { return k.split('.').reduce((a, b) => a == null ? a : a[b], o); }
+function setPath(o, k, v) { const ks = k.split('.'); let a = o; for (let i = 0; i < ks.length - 1; i++) a = a[ks[i]]; a[ks[ks.length - 1]] = v; }
+
+/* ---- 형상 ---- */
+function parsePolyText(t) {
+  const pts = [];
+  String(t || '').split(/\n|;/).forEach(l => { const m = l.trim().split(/[\s,]+/).map(Number); if (m.length >= 2 && isFinite(m[0]) && isFinite(m[1])) pts.push([m[0], m[1]]); });
+  return pts;
+}
+function baseShape() {
+  const b = S.bld;
+  if (b.shape === 'poly') { const p = parsePolyText(b.polyText); if (p.length >= 3) return p; }
+  return [[-b.W / 2, -b.D / 2], [b.W / 2, -b.D / 2], [b.W / 2, b.D / 2], [-b.W / 2, b.D / 2]];
+}
+function footprint() { const b = S.bld; return ensureCCW(baseShape().map(p => { const q = rotPt(p, b.rot); return [q[0] + b.ox, q[1] + b.oy]; })); }
+function bldH() { return S.bld.floors * S.bld.fh; }
+function glassById(id) { return S.glasses.find(g => g.id === id) || S.glasses[0]; }
+function facadeGeo() {
+  const fp = footprint(), out = [];
+  for (let i = 0; i < fp.length; i++) {
+    const A = fp[i], B = fp[(i + 1) % fp.length], L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    const n = [(B[1] - A[1]) / L, -(B[0] - A[0]) / L];
+    out.push({ i, A, B, L, n, az: (Math.atan2(n[0], n[1]) * R2D + 360) % 360 });
+  }
+  return out;
+}
+function syncFac() {
+  const n = footprint().length;
+  if (S.fac.length !== n) S.fac = Array.from({ length: n }, () => ({ wwr: S.defWwr, glass: S.defGlass }));
+}
+function mainSpec() {
+  syncFac();
+  return { poly: footprint(), H: bldH(), z0: Math.min(S.bld.glassZ0 || 0, bldH() - 0.5), facProps: S.fac.map(p => ({ wwr: p.wwr / 100, R0: glassById(p.glass).R / 100 })) };
+}
+function nbSpec() { return S.nb.map(n => ({ poly: n.poly, h: n.h })); }
+function params() {
+  const c = S.cfg;
+  return { year: +S.site.year, lat: +S.site.lat, lon: +S.site.lon, minStart: 240, minEnd: 1260, minStep: +c.minStep, dayStep: +c.dayStep, maxDist: +c.maxDist, minArea: +c.minArea, iLow: +c.iLow, iHigh: +c.iHigh };
+}
+let VSC = null;
+function rebuildViz() { VSC = buildScene(mainSpec(), nbSpec(), +S.cfg.maxDist); }
+
+/* ---- 입력 바인딩 ---- */
+const GEO_KEYS = /^(bld\.|site\.lat|site\.lon|site\.year|cfg\.(m0|m1|dayStep|minStep|maxDist))/;
+function bindAll() {
+  document.querySelectorAll('[data-k]').forEach(el => {
+    const k = el.dataset.k;
+    el.value = getPath(S, k) ?? '';
+    el.addEventListener('change', () => {
+      const cur = getPath(S, k);
+      let v = el.value;
+      if (typeof cur === 'number' || el.type === 'number') { v = parseFloat(v); if (!isFinite(v)) { el.value = cur; return; } }
+      setPath(S, k, v); onChange(k);
+    });
+  });
+}
+function refreshInputs() { document.querySelectorAll('[data-k]').forEach(el => { el.value = getPath(S, el.dataset.k) ?? ''; }); $('defWwr').value = S.defWwr; }
+function onChange(k) {
+  if (k === 'bld.shape' || k === 'bld.polyText') syncFac();
+  if (GEO_KEYS.test(k)) { markStale(); geometryChanged(); }
+  else if (/^cfg\.(iLow|iHigh|minArea|dailyLim|annualLim)/.test(k)) { if (RES) { reaggregate(); renderResults(); } }
+  if (/^rep\./.test(k) && RES) buildReport();
+  save(); renderSummaries();
+}
+function markStale() { if (RES) { STALE = true; $('runStatus').textContent = '입력 변경됨 · 다시 분석하세요'; $('runStatus').className = 'stale'; } }
+function geometryChanged() {
+  syncFac(); renderBldStats(); renderFacTbl(); rebuildViz(); build3D(); drawPlan(); updateTime();
+}
+
+/* ---- 요약/표 렌더 ---- */
+function renderSummaries() {
+  $('sumSite').textContent = fmt(S.site.lat, 4) + ', ' + fmt(S.site.lon, 4);
+  $('sumBld').textContent = S.bld.floors + '층 · ' + fmt(bldH(), 1) + 'm';
+  const g = glassById(S.defGlass); $('sumGlass').textContent = g ? g.name + ' ' + g.R + '%' : '';
+  $('sumNb').textContent = S.nb.length + '개동';
+  $('sumCfg').textContent = (S.cfg.dayStep == 1 ? '매일' : S.cfg.dayStep + '일 간격') + ' · ' + S.cfg.minStep + '분';
+  $('rectFields').hidden = S.bld.shape !== 'rect'; $('polyFields').hidden = S.bld.shape !== 'poly';
+}
+function renderBldStats() {
+  const fp = footprint(), a = Math.abs(polyArea(fp)), calc = a * S.bld.floors, diff = S.bld.gfa ? (calc - S.bld.gfa) / S.bld.gfa * 100 : 0;
+  $('bldStats').innerHTML = `<span>기준층 면적 <b>${fmt(a, 1)}㎡</b></span><span>계산 연면적 <b>${fmt(calc, 0)}㎡</b>${S.bld.gfa ? ` <span style="color:${Math.abs(diff) > 5 ? 'var(--sun)' : 'inherit'}">(입력 대비 ${diff > 0 ? '+' : ''}${fmt(diff, 1)}%)</span>` : ''}</span><span>높이 <b>${fmt(bldH(), 1)}m</b></span><span>입면 <b>${fp.length}면</b></span>`;
+}
+function glassOptions(sel) { return S.glasses.map(g => `<option value="${g.id}"${g.id === sel ? ' selected' : ''}>${esc(g.name)} (${g.R}%)</option>`).join(''); }
+function renderGlassTbl() {
+  $('glassTbl').tBodies[0].innerHTML = S.glasses.map(g => `<tr data-id="${g.id}"><td><input value="${esc(g.name)}" data-gf="name" aria-label="유리 이름"></td><td><input type="number" step="0.5" min="1" max="90" value="${g.R}" data-gf="R" aria-label="반사율"></td><td class="x">${S.glasses.length > 1 ? '<button class="xbtn" data-gdel title="삭제">×</button>' : ''}</td></tr>`).join('');
+  $('defGlass').innerHTML = glassOptions(S.defGlass);
+  renderFacTbl();
+}
+function renderFacTbl() {
+  syncFac();
+  const fg = facadeGeo();
+  $('facTbl').tBodies[0].innerHTML = fg.map(f => `<tr data-i="${f.i}"><td>${dirLabel(f.az)} <span class="hint num">${fmt(f.az, 0)}°</span></td><td class="num">${fmt(f.L, 1)}</td><td><input type="number" min="0" max="100" value="${S.fac[f.i].wwr}" data-ff="wwr" aria-label="유리 비율"></td><td><select data-ff="glass" aria-label="유리">${glassOptions(S.fac[f.i].glass)}</select></td></tr>`).join('');
+  const opts = fg.map(f => `<option value="${f.i}">${dirLabel(f.az)} 입면 (${fmt(f.L, 1)}m)</option>`).join('');
+  $('dxfElevFac').innerHTML = opts; $('trFac').innerHTML = opts;
+}
+function renderNbTbl() {
+  $('nbTbl').tBodies[0].innerHTML = S.nb.map((n, i) => `<tr data-i="${i}" class="${i === SEL_NB ? 'sel' : ''}"><td><input value="${esc(n.name)}" data-nf="name" aria-label="건물명"></td><td><input type="number" min="1" value="${n.floors}" data-nf="floors" aria-label="층수"></td><td><input type="number" step="0.5" value="${fmt(n.h, 1).replace(/,/g, '')}" data-nf="h" aria-label="높이"></td><td class="x"><button class="xbtn" data-ndel title="삭제">×</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">인접 건물이 없습니다.</td></tr>`;
+  renderSummaries();
+}
+
+/* ---- 이벤트: 유리/입면/인접건물 표 ---- */
+function wireTables() {
+  $('glassTbl').addEventListener('change', e => {
+    const tr = e.target.closest('tr'); if (!tr) return; const g = S.glasses.find(x => x.id === tr.dataset.id); if (!g) return;
+    if (e.target.dataset.gf === 'R') { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) g.R = Math.min(90, v); }
+    else g.name = e.target.value || g.name;
+    renderGlassTbl(); afterGlass();
+  });
+  $('glassTbl').addEventListener('click', e => {
+    if (!e.target.hasAttribute('data-gdel')) return;
+    const id = e.target.closest('tr').dataset.id; S.glasses = S.glasses.filter(g => g.id !== id);
+    if (S.defGlass === id) S.defGlass = S.glasses[0].id;
+    S.fac.forEach(f => { if (f.glass === id) f.glass = S.defGlass; });
+    renderGlassTbl(); afterGlass();
+  });
+  $('btnAddGlass').onclick = () => { const id = 'g' + Date.now().toString(36); S.glasses.push({ id, name: '자사 제품 (입력)', R: 10 }); renderGlassTbl(); afterGlass(); };
+  $('defGlass').onchange = e => { S.defGlass = e.target.value; save(); renderSummaries(); };
+  $('defWwr').onchange = e => { const v = parseFloat(e.target.value); if (isFinite(v)) S.defWwr = Math.max(0, Math.min(100, v)); save(); };
+  $('btnApplyAll').onclick = () => { S.fac.forEach(f => { f.glass = S.defGlass; f.wwr = S.defWwr; }); renderFacTbl(); afterGlass(); toast('모든 입면에 ' + glassById(S.defGlass).name + ' · 유리 비율 ' + S.defWwr + '% 적용'); };
+  $('facTbl').addEventListener('change', e => {
+    const tr = e.target.closest('tr'); if (!tr) return; const f = S.fac[+tr.dataset.i];
+    if (e.target.dataset.ff === 'wwr') { const v = parseFloat(e.target.value); if (isFinite(v)) f.wwr = Math.max(0, Math.min(100, v)); }
+    else f.glass = e.target.value;
+    afterGlass();
+  });
+  $('nbTbl').addEventListener('change', e => {
+    const tr = e.target.closest('tr'); if (!tr) return; const n = S.nb[+tr.dataset.i]; const k = e.target.dataset.nf;
+    if (k === 'name') n.name = e.target.value;
+    else { const v = parseFloat(e.target.value); if (!isFinite(v) || v <= 0) return; if (k === 'floors') { n.floors = v; n.h = v * S.vw.fh; } else n.h = v; }
+    renderNbTbl(); markStale(); rebuildViz(); build3D(); drawPlan(); updateTime(); save();
+  });
+  $('nbTbl').addEventListener('click', e => {
+    const tr = e.target.closest('tr'); if (!tr || tr.dataset.i == null) return;
+    if (e.target.hasAttribute('data-ndel')) { S.nb.splice(+tr.dataset.i, 1); SEL_NB = -1; nbChanged(); return; }
+    if (e.target.tagName !== 'INPUT') { SEL_NB = +tr.dataset.i; renderNbTbl(); drawPlan(); build3D(); }
+  });
+  $('btnClearNb').onclick = () => { S.nb = []; SEL_NB = -1; nbChanged(); };
+}
+function afterGlass() { save(); renderSummaries(); rebuildViz(); build3D(); if (RES) { reaggregate(); renderResults(); } updateTime(); }
+function nbChanged() { renderNbTbl(); markStale(); rebuildViz(); build3D(); drawPlan(); updateTime(); save(); }
+
+/* ===== 분석 실행 ===== */
+let RES = null, STALE = true, RUNNING = false;
+async function runAnalysis() {
+  if (RUNNING) return;
+  if (!S.nb.length) { toast('인접 건물을 먼저 불러오거나 그려 주세요.'); return; }
+  RUNNING = true; $('btnRun').disabled = true;
+  const P = params(); const sc = buildScene(mainSpec(), nbSpec(), P.maxDist);
+  const y = P.year, d0 = doyOf(y, Math.max(1, Math.min(12, S.cfg.m0)), 1);
+  const m1 = Math.max(1, Math.min(12, S.cfg.m1)), d1 = m1 === 12 ? daysInYear(y) : doyOf(y, m1 + 1, 1) - 1;
+  const days = []; for (let d = d0; d <= Math.max(d0, d1); d += P.dayStep) days.push(d);
+  const ev = [], t0 = performance.now();
+  for (let i = 0; i < days.length; i++) {
+    analyzeDay(sc, P, days[i], ev);
+    if (i % 12 === 0) { $('runStatus').className = ''; $('runStatus').textContent = '분석 중 ' + Math.round(i / days.length * 100) + '%'; await new Promise(r => setTimeout(r, 0)); }
+  }
+  RES = { P, ev, days, range: [d0, d1], names: S.nb.map(n => n.name), nbInfo: S.nb.map(n => ({ floors: n.floors, h: n.h })), fac: facadeGeo().map(f => ({ az: f.az, L: f.L })), ms: performance.now() - t0, when: new Date() };
+  STALE = false; RUNNING = false; $('btnRun').disabled = false;
+  reaggregate();
+  $('runStatus').className = ''; $('runStatus').textContent = '분석 완료 · ' + days.length + '일 × ' + P.minStep + '분 간격 (' + fmt(RES.ms / 1000, 1) + '초)';
+  HEAT_SEL = -1; renderResults(); pickRepresentative(); build3D(); drawPlan();
+}
+function reaggregate() {
+  if (!RES) return;
+  const P = Object.assign({}, RES.P, { minArea: +S.cfg.minArea, iLow: +S.cfg.iLow, iHigh: +S.cfg.iHigh });
+  RES.P2 = P;
+  const R0map = {}, wwrMap = {};
+  S.fac.forEach((f, i) => { R0map[i] = glassById(f.glass).R / 100; wwrMap[i] = f.wwr / 100; });
+  RES.ag = aggregate(RES.ev, RES.names.length, P, R0map, null, wwrMap);
+  RES.cmp = S.glasses.map(g => {
+    const a = aggregate(RES.ev, RES.names.length, P, null, g.R / 100, wwrMap);
+    return { g, rec: a.rec, over: a.rec.filter(r => judge(r).k === 'bad').length, strong: a.rec.reduce((s, r) => s + r.strongH, 0), mid: a.rec.reduce((s, r) => s + r.midH, 0), maxI: Math.max(0, ...a.rec.map(r => r.maxI)), hours: a.rec.reduce((s, r) => s + r.hours, 0) };
+  });
+}
+/* 판정: 반사광 세기가 '중'(기본 100 W/㎡) 이상인 시간만 셈.
+   유리 반사율이 낮으면 같은 경로로 반사돼도 세기가 약해 판정 시간에서 빠짐 */
+function judge(R) {
+  if (!R || R.hours <= 0) return { k: 'ok', t: '영향 없음' };
+  if (R.midH >= +S.cfg.annualLim || R.maxDailyMid >= +S.cfg.dailyLim) return { k: 'bad', t: '참고 기준 초과' };
+  if (R.midH > 0) return { k: 'warn', t: '영향 있음 (기준 이내)' };
+  return { k: 'ok', t: '약한 반사만' };
+}
+function worstIdx() { if (!RES) return -1; let w = -1, b = 0; RES.ag.rec.forEach((R, i) => { const v = R.midH * 1e4 + R.hours; if (v > b) { b = v; w = i; } }); return w; }
+function pickRepresentative() {
+  const w = worstIdx(); if (w < 0) return;
+  const R = RES.ag.rec[w]; const pk = R.peak || { d: R.maxDay, m: R.minM };
+  setTime(pk.d, pk.m);
+}
+
+/* ===== 결과 화면 ===== */
+let HEAT_SEL = -1;
+function renderResults() {
+  if (!RES) return;
+  $('resEmpty').hidden = true; $('resBody').hidden = false;
+  const recs = RES.ag.rec, names = RES.names, y = RES.P.year, P = RES.P2;
+  const aff = recs.filter(r => r.hours > 0).length, over = recs.filter(r => judge(r).k === 'bad').length;
+  const w = worstIdx(); const W = w >= 0 ? recs[w] : null;
+  let dmax = 0, dmaxI = -1; recs.forEach((r, i) => { if (r.maxDaily > dmax) { dmax = r.maxDaily; dmaxI = i; } });
+  const peakI = Math.max(0, ...recs.map(r => r.maxI));
+  $('kpis').innerHTML = [
+    ['영향 받는 인접 건물', `${aff}<small>/ ${names.length}개동</small>`, aff ? '반사광이 벽면에 닿는 건물' : '반사광 도달 없음'],
+    ['기준 초과 건물', `${over}<small>개동</small>`, `세기 ${P.iLow} W/㎡ 이상 반사가 일 ${S.cfg.dailyLim}분 또는 연 ${S.cfg.annualLim}시간 이상`],
+    ['최대 연간 현휘 (중 이상)', `${fmt(W ? W.midH : 0, 1)}<small>시간</small>`, W ? esc(names[w]) + ` · 약한 반사 포함 ${fmt(W.hours, 1)}시간` : '-'],
+    ['최대 1일 지속', `${fmt(dmax, 0)}<small>분</small>`, dmaxI >= 0 ? esc(names[dmaxI]) + ' · ' + mdStr(y, recs[dmaxI].maxDay) : '-'],
+    ['최대 반사 일사강도', `${fmt(peakI, 0)}<small>W/㎡</small>`, '맑은 날 직달일사 × 입사각별 반사율']
+  ].map(k => `<div class="kpi"><span>${k[0]}</span><b>${k[1]}</b><em>${k[2]}</em></div>`).join('');
+
+  const sevDot = R => R.maxI >= P.iHigh ? 'var(--bad)' : R.maxI >= P.iLow ? 'var(--sun)' : 'var(--warn)';
+  $('resTbl').innerHTML = `<thead><tr><th>건물</th><th>층수·높이</th><th>반사 도달</th><th>중 이상 (연간)</th><th>중 이상 (1일 최대)</th><th>발생 일수</th><th>발생 기간</th><th>시간대</th><th>원인 입면</th><th>최대 강도</th><th>'강' 등급</th><th>판정</th></tr></thead><tbody>` +
+    recs.map((R, i) => {
+      const j = judge(R), nf = RES.nbInfo[i];
+      const top = Object.entries(R.fac).sort((a, b) => b[1] - a[1])[0];
+      const fdir = top ? dirLabel(RES.fac[+top[0]].az) + ' 입면' : '-';
+      return `<tr data-r="${i}" class="${i === HEAT_SEL ? 'sel' : ''}"><td class="t">${esc(names[i])}</td><td>${nf.floors}층 · ${fmt(nf.h, 0)}m</td><td>${R.hours ? fmt(R.hours, 1) + ' h' : '-'}</td><td>${R.midH ? fmt(R.midH, 1) + ' h' : '-'}</td><td>${R.maxDailyMid ? R.maxDailyMid + ' 분 <span class="hint">(' + mdStr(y, R.maxDayMid) + ')</span>' : '-'}</td><td>${R.nDaysMid ? R.nDaysMid + ' 일' : (R.nDays ? '<span class="hint">' + R.nDays + ' 일(약)</span>' : '-')}</td><td class="t">${R.first != null ? mdStr(y, R.first) + ' ~ ' + mdStr(y, R.last) : '-'}</td><td>${R.maxM >= 0 ? hhmm(R.minM) + '–' + hhmm(R.maxM + RES.P.minStep) : '-'}</td><td class="t">${fdir}</td><td>${R.maxI ? '<span class="sev" style="background:' + sevDot(R) + '"></span>' + fmt(R.maxI, 0) : '-'}</td><td>${R.strongH ? fmt(R.strongH, 1) + ' h' : '-'}</td><td class="t"><span class="pill ${j.k}">${j.t}</span></td></tr>`;
+    }).join('') + '</tbody>';
+
+  $('heatSel').innerHTML = `<option value="-1">전체 인접 건물</option>` + names.map((n, i) => `<option value="${i}"${i === HEAT_SEL ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  drawHeat($('heat'), HEAT_SEL, pal());
+  $('heatLegend').innerHTML = `<span><i class="sev" style="background:var(--warn)"></i>약 (&lt; ${P.iLow} W/㎡)</span><span><i class="sev" style="background:var(--sun)"></i>중 (${P.iLow}–${P.iHigh})</span><span><i class="sev" style="background:var(--bad)"></i>강 (≥ ${P.iHigh})</span><span>회색 곡선: 일출·일몰</span>`;
+  renderCmp(); renderMonths(); renderNotes();
+  buildReport();
+}
+function renderCmp() {
+  const cur = glassById(S.defGlass), mx = Math.max(1, ...RES.cmp.map(c => c.mid));
+  $('cmpBars').innerHTML = RES.cmp.slice().sort((a, b) => a.g.R - b.g.R).map(c => `<div class="bar ${c.g.id === cur.id ? 'cur' : ''}"><div class="lbl" title="${esc(c.g.name)}">${esc(c.g.name)} <small>${c.g.R}%</small></div><div class="trk"><i class="mid" style="width:${c.mid / mx * 100}%"></i><i style="width:${c.strong / mx * 100}%"></i></div><div class="v" title="'중' 이상 ${fmt(c.mid, 0)}시간">${fmt(c.strong, 1)}h</div></div>`).join('');
+  const lo = RES.cmp.slice().sort((a, b) => a.g.R - b.g.R)[0], cc = RES.cmp.find(c => c.g.id === cur.id);
+  const list = RES.cmp.slice().sort((a, b) => a.g.R - b.g.R).map(c => `${esc(c.g.name)} ${c.g.R}%: 기준 초과 ${c.over}동 · 최대 ${fmt(c.maxI, 0)} W/㎡`).join('<br>');
+  $('cmpNote').innerHTML = `진한 막대: '강' 등급(≥${S.cfg.iHigh} W/㎡) 시간 합계, 연한 막대: '중' 이상 시간 합계 (전 인접건물 합산). 형상이 같으면 반사광이 닿는 경로와 시간은 같고, 유리 반사율에 비례해 세기가 달라집니다.<br>${list}` +
+    (cc && lo && lo.g.id !== cc.g.id ? `<br><b>${esc(cc.g.name)} → ${esc(lo.g.name)}</b>: 최대 반사 세기 ${fmt(cc.maxI, 0)} → ${fmt(lo.maxI, 0)} W/㎡ (${fmt((1 - lo.maxI / Math.max(1, cc.maxI)) * 100, 0)}% 감소), '중' 이상 ${fmt(cc.mid, 1)}h → ${fmt(lo.mid, 1)}h, 기준 초과 ${cc.over}동 → ${lo.over}동.` : '');
+}
+function monthTotals(sel) { const m = new Array(12).fill(0); RES.ag.rec.forEach((R, i) => { if (sel < 0 || sel === i) R.month.forEach((v, k) => { m[k] += v / 60; }); }); return m; }
+function renderMonths() {
+  const m = monthTotals(HEAT_SEL), mx = Math.max(1, ...m);
+  $('monthSel').textContent = HEAT_SEL < 0 ? '전체 합계 (시간)' : RES.names[HEAT_SEL] + ' (시간)';
+  $('months').innerHTML = m.map((v, i) => `<div><em>${v >= 0.05 ? fmt(v, v < 10 ? 1 : 0) : ''}</em><i style="height:${v / mx * 100}%"></i><span>${i + 1}월</span></div>`).join('');
+}
+function noteLines() {
+  const recs = RES.ag.rec, names = RES.names, y = RES.P.year, P = RES.P2, out = [];
+  const cur = glassById(S.defGlass), w = worstIdx();
+  const aff = recs.map((r, i) => [r, i]).filter(a => a[0].hours > 0);
+  const facTxt = [...new Set(S.fac.map(f => glassById(f.glass).name + '(' + glassById(f.glass).R + '%)'))].join(', ');
+  if (!aff.length) { out.push(`적용 유리 ${facTxt} 기준으로 분석 기간 중 인접 건물 ${names.length}개동에 반사광이 도달하지 않습니다.`); }
+  else {
+    const R = recs[w];
+    out.push(`적용 유리 ${facTxt} 기준, 인접 건물 ${names.length}개동 중 ${aff.length}개동에 반사광이 도달합니다.`);
+    const top = Object.entries(R.fac).sort((a, b) => b[1] - a[1])[0];
+    out.push(`영향이 가장 큰 건물은 ${names[w]}로, 세기 ${P.iLow} W/㎡ 이상 반사가 연간 약 ${fmt(R.midH, 1)}시간(${R.nDaysMid}일), 하루 최대 ${R.maxDailyMid}분 발생합니다 (약한 반사 포함 시 ${fmt(R.hours, 1)}시간). 주로 ${mdStr(y, R.first)}~${mdStr(y, R.last)} 사이 ${hhmm(R.minM)}–${hhmm(R.maxM + RES.P.minStep)}에 ${top ? dirLabel(RES.fac[+top[0]].az) + ' 입면' : ''}의 반사가 원인입니다.`);
+    const over = aff.filter(a => judge(a[0]).k === 'bad').map(a => names[a[1]]);
+    out.push(over.length ? `참고 기준(세기 ${P.iLow} W/㎡ 이상 반사가 1일 ${S.cfg.dailyLim}분 또는 연 ${S.cfg.annualLim}시간)을 넘는 건물: ${over.join(', ')}.` : `모든 영향 건물이 참고 기준(1일 ${S.cfg.dailyLim}분, 연 ${S.cfg.annualLim}시간) 이내입니다.`);
+  }
+  const sorted = RES.cmp.slice().sort((a, b) => a.g.R - b.g.R), cc = RES.cmp.find(c => c.g.id === cur.id), lo = sorted[0];
+  if (cc && lo && aff.length) {
+    const red = cc.strong > 0 ? (1 - lo.strong / cc.strong) * 100 : 0;
+    out.push(`유리를 ${lo.g.name}(${lo.g.R}%)로 바꾸면 반사광이 닿는 시간은 같지만 세기가 반사율에 비례해 약해져, 기준 초과 건물이 ${cc.over}동에서 ${lo.over}동으로 바뀌고, '강' 등급(≥${P.iHigh} W/㎡) 시간이 ${fmt(cc.strong, 1)}시간에서 ${fmt(lo.strong, 1)}시간으로${cc.strong > 0 ? ' ' + fmt(red, 0) + '%' : ''} 줄고 최대 반사 강도는 ${fmt(cc.maxI, 0)} → ${fmt(lo.maxI, 0)} W/㎡로 낮아집니다.`);
+  }
+  return out;
+}
+function mitigations() {
+  const recs = RES.ag.rec, out = [];
+  const facCount = {}; recs.forEach(R => Object.entries(R.fac).forEach(([f, c]) => { facCount[f] = (facCount[f] || 0) + c; }));
+  const topF = Object.entries(facCount).sort((a, b) => b[1] - a[1]).slice(0, 2).map(e => dirLabel(RES.fac[+e[0]].az) + ' 입면');
+  if (topF.length) out.push(`영향이 집중되는 ${topF.join('·')}에 한해 저반사 로이 유리로 바꾸면 비용 증가를 최소화하면서 반사 강도를 낮출 수 있습니다.`);
+  out.push('반사광이 낮은 각도로 내려가는 저층 인접동이 많다면, 해당 입면 하부 구간에 세라믹 프릿(도트) 패턴이나 외부 수평 루버를 적용해 반사 면적을 줄이는 방안을 검토합니다.');
+  out.push('입면을 수직 방향으로 분절하거나 3~5° 기울이면 반사 방향이 하늘 쪽으로 바뀌어 인접건물 도달 시간이 줄어듭니다(설계 변경 필요).');
+  return out;
+}
+function renderNotes() {
+  $('notes').innerHTML = noteLines().map(t => `<li>${esc(t)}</li>`).join('') + mitigations().map(t => `<li class="hint">${esc(t)}</li>`).join('');
+}
+function wireResults() {
+  $('resTbl').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-r]'); if (!tr) return;
+    const i = +tr.dataset.r; HEAT_SEL = HEAT_SEL === i ? -1 : i;
+    const R = RES.ag.rec[i]; if (HEAT_SEL >= 0 && R && R.peak) setTime(R.peak.d, R.peak.m);
+    renderResults();
+  });
+  $('heatSel').onchange = e => { HEAT_SEL = +e.target.value; renderResults(); };
+  $('heat').addEventListener('click', e => {
+    if (!RES || !HEAT_GEOM) return;
+    const r = $('heat').getBoundingClientRect(), g = HEAT_GEOM;
+    const x = (e.clientX - r.left) / r.width * g.W, yv = (e.clientY - r.top) / r.height * g.H;
+    if (x < g.l || x > g.W - g.r || yv < g.t || yv > g.H - g.b) return;
+    const d = Math.max(1, Math.round((x - g.l) / g.dw) + 1), m = Math.round((g.y0 + (yv - g.t) / g.mh) / 5) * 5;
+    setTime(d, m); toast(mdStr(RES.P.year, d) + ' ' + hhmm(m) + ' 시점으로 이동');
+  });
+}
+
+/* ---- 색 ---- */
+const LIGHT = { bg: '#ffffff', panel: '#ffffff', sunk: '#f5f7f9', ink: '#16202a', muted: '#5a6776', line: '#d6dce3', glass: '#22788a', glassSoft: '#d5ebef', sun: '#d9821a', warn: '#c99312', bad: '#c8402f', ok: '#2e8a57', nb: '#c4cad2', nbEdge: '#8a95a2', ground: '#e3e7eb' };
+function pal(forceLight) {
+  if (forceLight) return LIGHT;
+  const cs = getComputedStyle(document.documentElement), g = k => cs.getPropertyValue(k).trim();
+  return { bg: g('--bg'), panel: g('--panel'), sunk: g('--sunk'), ink: g('--ink'), muted: g('--muted'), line: g('--line'), glass: g('--glass'), glassSoft: g('--glass-soft'), sun: g('--sun'), warn: g('--warn'), bad: g('--bad'), ok: g('--ok'), nb: g('--nb'), nbEdge: g('--nb-edge'), ground: g('--ground') };
+}
+function nbColor(i, p) {
+  if (!RES || STALE || RES.names.length !== S.nb.length) return null;
+  const j = judge(RES.ag.rec[i]); return j.k === 'bad' ? p.bad : j.k === 'warn' ? p.warn : null;
+}
+
+/* ===== 히트맵 ===== */
+let HEAT_GEOM = null;
+function heatCells(sel) {
+  const out = []; const P = RES.P2;
+  for (const o of RES.ag.keyMap.values()) { if (o.a < P.minArea) continue; if (sel >= 0 && o.r !== sel) continue; out.push(o); }
+  return out;
+}
+function drawHeat(cv, sel, p, size) {
+  const dpr = size ? 1 : Math.min(2, devicePixelRatio || 1);
+  const W = size ? size[0] : Math.max(640, cv.clientWidth), H = size ? size[1] : 300;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.fillStyle = p.panel; c.fillRect(0, 0, W, H);
+  const l = 44, r = 10, t = 10, b = 26, y = RES.P.year, nd = daysInYear(y), y0 = 300, y1 = 1200;
+  const dw = (W - l - r) / nd, mh = (H - t - b) / (y1 - y0);
+  HEAT_GEOM = size ? HEAT_GEOM : { W, H, l, r, t, b, dw, mh, y0 };
+  c.fillStyle = p.sunk; c.fillRect(l, t, W - l - r, H - t - b);
+  // 분석 범위 밖 음영
+  c.fillStyle = p.line; c.globalAlpha = .35;
+  if (RES.range[0] > 1) c.fillRect(l, t, (RES.range[0] - 1) * dw, H - t - b);
+  if (RES.range[1] < nd) c.fillRect(l + RES.range[1] * dw, t, (nd - RES.range[1]) * dw, H - t - b);
+  c.globalAlpha = 1;
+  // 격자
+  c.strokeStyle = p.line; c.lineWidth = 1; c.fillStyle = p.muted; c.font = '10.5px "IBM Plex Mono", monospace';
+  for (let hh = 5; hh <= 20; hh++) { const yy = t + (hh * 60 - y0) * mh; c.beginPath(); c.moveTo(l, yy + .5); c.lineTo(W - r, yy + .5); c.globalAlpha = hh % 3 === 0 ? 1 : .45; c.stroke(); c.globalAlpha = 1; if (hh % 3 === 0 || hh === 20) { c.textAlign = 'right'; c.textBaseline = 'middle'; c.fillText(String(hh).padStart(2, '0') + ':00', l - 6, yy); } }
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  for (let m = 1; m <= 12; m++) { const d = doyOf(y, m, 1), xx = l + (d - 1) * dw; c.beginPath(); c.moveTo(xx + .5, t); c.lineTo(xx + .5, H - b); c.stroke(); const dn = m === 12 ? nd + 1 : doyOf(y, m + 1, 1); c.fillText(m + '월', l + ((d + dn) / 2 - 1) * dw, H - b + 7); }
+  // 일출·일몰
+  const P = RES.P; c.strokeStyle = p.muted; c.lineWidth = 1.2; c.globalAlpha = .7;
+  ['rise', 'set'].forEach(kind => {
+    c.beginPath(); let first = true;
+    for (let d = 1; d <= nd; d += 3) {
+      let mm = null;
+      if (kind === 'rise') { for (let m = 240; m < 720; m += 4) if (sunPosition(kstToUtc(y, d, m), P.lat, P.lon).alt > 0) { mm = m; break; } }
+      else { for (let m = 1260; m > 720; m -= 4) if (sunPosition(kstToUtc(y, d, m), P.lat, P.lon).alt > 0) { mm = m; break; } }
+      if (mm == null) continue;
+      const xx = l + (d - 0.5) * dw, yy = t + (mm - y0) * mh; if (first) { c.moveTo(xx, yy); first = false; } else c.lineTo(xx, yy);
+    }
+    c.stroke();
+  });
+  c.globalAlpha = 1;
+  // 셀
+  const P2 = RES.P2, cw = Math.max(1, dw * P.dayStep), ch = Math.max(1.2, mh * P.minStep);
+  for (const o of heatCells(sel)) {
+    if (o.m < y0 || o.m > y1) continue;
+    c.fillStyle = o.I >= P2.iHigh ? p.bad : o.I >= P2.iLow ? p.sun : p.warn;
+    c.fillRect(l + (o.d - 1) * dw, t + (o.m - y0) * mh, cw, ch);
+  }
+  // 현재 시점
+  if (!size) { const xx = l + (S.t.doy - 0.5) * dw, yy = t + (S.t.min - y0) * mh; c.strokeStyle = p.ink; c.lineWidth = 1.5; c.beginPath(); c.arc(xx, yy, 5, 0, Math.PI * 2); c.stroke(); }
+}
+
+/* ===== 시점 바 ===== */
+let NOW = null;
+function setTime(doy, min) {
+  S.t.doy = Math.max(1, Math.min(daysInYear(S.site.year), Math.round(doy)));
+  S.t.min = Math.max(300, Math.min(1200, Math.round(min / 5) * 5));
+  const o = dateOf(S.site.year, S.t.doy);
+  $('tDate').value = `${S.site.year}-${String(o.m).padStart(2, '0')}-${String(o.d).padStart(2, '0')}`;
+  $('tMin').value = S.t.min; updateTime(); save();
+}
+function updateTime() {
+  if (!VSC) rebuildViz();
+  $('tClock').textContent = hhmm(S.t.min);
+  NOW = hitsAt(VSC, params(), S.t.doy, S.t.min, true);
+  const sp = NOW.sun;
+  $('rAlt').textContent = fmt(sp.alt, 1) + '°'; $('rAz').textContent = fmt(sp.az, 1) + '° ' + dirLabel(sp.az);
+  $('rDni').textContent = sp.alt > 0 ? fmt(NOW.dni, 0) + ' W/㎡' : '-';
+  const recs = [...new Set(NOW.hits.map(h => h.rec))];
+  const pill = $('hitPill');
+  if (sp.alt <= 0) { pill.className = 'hitpill'; pill.textContent = '해가 진 시간'; }
+  else if (recs.length) { pill.className = 'hitpill on'; pill.textContent = '반사광 도달: ' + recs.map(r => S.nb[r] ? S.nb[r].name : '').join(', '); }
+  else { pill.className = 'hitpill'; pill.textContent = '반사광 도달 없음'; }
+  update3DDynamic(); drawPlan();
+  if (RES && !$('tres').hidden) drawHeat($('heat'), HEAT_SEL, pal());
+}
+function wireTime() {
+  $('tDate').onchange = e => { const v = e.target.value.split('-').map(Number); if (v.length === 3) { if (v[0] !== +S.site.year) { S.site.year = v[0]; refreshInputs(); markStale(); } setTime(doyOf(v[0], v[1], v[2]), S.t.min); } };
+  $('tMin').oninput = e => { S.t.min = +e.target.value; updateTime(); };
+  let timer = null;
+  $('btnPlay').onclick = () => {
+    if (timer) { clearInterval(timer); timer = null; $('btnPlay').textContent = '하루 재생'; $('btnPlay').setAttribute('aria-pressed', 'false'); return; }
+    $('btnPlay').textContent = '정지'; $('btnPlay').setAttribute('aria-pressed', 'true');
+    timer = setInterval(() => { let m = S.t.min + 5; if (m > 1200) m = 300; S.t.min = m; $('tMin').value = m; updateTime(); }, 90);
+  };
+}
+
+/* ===== 3D ===== */
+const R3 = { ok: false };
+const T3 = (x, y, z) => new THREE.Vector3(x, z, -y);
+function init3D() {
+  const el = $('view3d');
+  if (!window.THREE || !THREE.OrbitControls) { el.innerHTML = '<p class="empty">3D 라이브러리를 불러오지 못했습니다. 배치도 탭과 분석 결과는 그대로 쓸 수 있습니다.</p>'; return; }
+  try {
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+    el.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    const cam = new THREE.PerspectiveCamera(38, 1, 1, 30000);
+    const ctl = new THREE.OrbitControls(cam, renderer.domElement);
+    ctl.maxPolarAngle = Math.PI * 0.495; ctl.enableDamping = false;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.85));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.55); scene.add(dl); scene.add(dl.target);
+    const stat = new THREE.Group(), dyn = new THREE.Group(); scene.add(stat); scene.add(dyn);
+    Object.assign(R3, { ok: true, renderer, scene, cam, ctl, dl, stat, dyn });
+    ctl.addEventListener('change', render3D);
+    new ResizeObserver(() => { const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); render3D(); }).observe(el);
+    resetCam();
+  } catch (e) { el.innerHTML = '<p class="empty">이 브라우저에서 3D 보기를 시작하지 못했습니다 (WebGL).</p>'; R3.ok = false; }
+}
+function sceneRadius() {
+  let r = 80; footprint().forEach(p => { r = Math.max(r, Math.hypot(p[0], p[1])); });
+  S.nb.forEach(n => n.poly.forEach(p => { r = Math.max(r, Math.hypot(p[0] - S.bld.ox, p[1] - S.bld.oy)); }));
+  return Math.min(r, 900);
+}
+function resetCam(top) {
+  if (!R3.ok) return;
+  const r = sceneRadius(), H = bldH(), c = T3(S.bld.ox, S.bld.oy, H * 0.3);
+  R3.ctl.target.copy(c);
+  if (top) R3.cam.position.set(c.x, r * 2.6 + H, c.z + 0.01);
+  else R3.cam.position.set(c.x + r * 1.25, H * 0.9 + r * 0.7, c.z + r * 1.45);
+  R3.ctl.update(); render3D();
+}
+function disposeGroup(g) { while (g.children.length) { const o = g.children.pop(); o.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material) { (Array.isArray(x.material) ? x.material : [x.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); } }); } }
+function prismGeo(poly, z0, z1) {
+  const pos = [];
+  for (let i = 0; i < poly.length; i++) {
+    const A = poly[i], B = poly[(i + 1) % poly.length];
+    const a0 = T3(A[0], A[1], z0), b0 = T3(B[0], B[1], z0), b1 = T3(B[0], B[1], z1), a1 = T3(A[0], A[1], z1);
+    [a0, b0, b1, a0, b1, a1].forEach(v => pos.push(v.x, v.y, v.z));
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+}
+function roofGeo(poly, z) {
+  const v2 = poly.map(p => new THREE.Vector2(p[0], p[1]));
+  const tris = THREE.ShapeUtils.triangulateShape(v2, []);
+  const pos = []; tris.forEach(t => t.forEach(i => { const v = T3(poly[i][0], poly[i][1], z); pos.push(v.x, v.y, v.z); }));
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+}
+function lineGeo(pts) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flatMap(v => [v.x, v.y, v.z]), 3)); return g; }
+function textSprite(txt, color, size) {
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const c = cv.getContext('2d');
+  c.font = '600 40px "IBM Plex Sans KR", sans-serif'; c.fillStyle = color; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, 64, 34);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+  sp.scale.set(size * 2, size, 1); return sp;
+}
+function build3D(forceLight) {
+  if (!R3.ok) return;
+  const p = pal(forceLight), C = x => new THREE.Color(x);
+  disposeGroup(R3.stat);
+  R3.renderer.setClearColor(C(p.panel), 1);
+  const r = sceneRadius();
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(r * 2.4, 64), new THREE.MeshLambertMaterial({ color: C(p.ground) }));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(S.bld.ox, -0.05, -S.bld.oy); R3.stat.add(ground);
+  const grid = new THREE.GridHelper(Math.ceil(r * 4 / 50) * 50, Math.ceil(r * 4 / 50), C(p.line), C(p.line));
+  grid.position.set(S.bld.ox, 0, -S.bld.oy); grid.material.transparent = true; grid.material.opacity = .55; R3.stat.add(grid);
+  const N = textSprite('N', p.ink, 14); N.position.copy(T3(S.bld.ox, S.bld.oy + r * 1.15, 2)); R3.stat.add(N);
+  const narrow = new THREE.Line(lineGeo([T3(S.bld.ox, S.bld.oy + r * 0.85, 0.3), T3(S.bld.ox, S.bld.oy + r * 1.05, 0.3)]), new THREE.LineBasicMaterial({ color: C(p.ink) })); R3.stat.add(narrow);
+  // 검토 건물
+  const fp = footprint(), H = bldH(), z0 = Math.min(S.bld.glassZ0 || 0, H - 0.5);
+  syncFac();
+  fp.forEach((A, i) => {
+    const B = fp[(i + 1) % fp.length], f = S.fac[i], gR = glassById(f.glass).R;
+    const op = 0.55 + Math.min(0.4, gR / 100);
+    if ((S.bld.style || 'cw') !== 'cw' && window.drawWindows) { window.drawWindows(A, B, f, H, C(p.glass), op, C(p.nb), i); return; }
+    const m = new THREE.Mesh(prismGeo([A, B], z0, H), new THREE.MeshLambertMaterial({ color: C(p.glass), transparent: true, opacity: op, side: THREE.DoubleSide }));
+    // prismGeo([A,B]) 는 A→B, B→A 두 벽을 만들므로 첫 벽만 사용
+    const pos = m.geometry.getAttribute('position'); m.geometry.setDrawRange(0, 6); pos.needsUpdate = true;
+    R3.stat.add(m);
+    if (z0 > 0) R3.stat.add(new THREE.Mesh(prismGeo([A, B], 0, z0), new THREE.MeshLambertMaterial({ color: C(p.nb), side: THREE.DoubleSide })));
+  });
+  R3.stat.add(new THREE.Mesh(roofGeo(fp, H), new THREE.MeshLambertMaterial({ color: C(p.nbEdge), side: THREE.DoubleSide })));
+  const fl = []; for (let k = 1; k <= S.bld.floors; k++) { const z = k * S.bld.fh; for (let i = 0; i < fp.length; i++) { const A = fp[i], B = fp[(i + 1) % fp.length]; fl.push(T3(A[0], A[1], z), T3(B[0], B[1], z)); } }
+  fp.forEach(A => fl.push(T3(A[0], A[1], 0), T3(A[0], A[1], H)));
+  R3.stat.add(new THREE.LineSegments(lineGeo(fl), new THREE.LineBasicMaterial({ color: C(p.glass), transparent: true, opacity: .8 })));
+  // 입면 방위 표시
+  facadeGeo().forEach(f => { const s = textSprite(dirLabel(f.az), p.glass, 6); const mx = (f.A[0] + f.B[0]) / 2 + f.n[0] * 9, my = (f.A[1] + f.B[1]) / 2 + f.n[1] * 9; s.position.copy(T3(mx, my, 3)); R3.stat.add(s); });
+  // 인접 건물
+  S.nb.forEach((n, i) => {
+    const poly = ensureCCW(n.poly), hc = nbColor(i, p);
+    const col = hc ? C(p.nb).lerp(C(hc), 0.6) : C(p.nb);
+    const mat = new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide });
+    R3.stat.add(new THREE.Mesh(prismGeo(poly, 0, n.h), mat));
+    R3.stat.add(new THREE.Mesh(roofGeo(poly, n.h), mat));
+    const ed = []; poly.forEach((A, k) => { const B = poly[(k + 1) % poly.length]; ed.push(T3(A[0], A[1], n.h), T3(B[0], B[1], n.h), T3(A[0], A[1], 0), T3(A[0], A[1], n.h)); });
+    R3.stat.add(new THREE.LineSegments(lineGeo(ed), new THREE.LineBasicMaterial({ color: C(i === SEL_NB ? p.ink : p.nbEdge) })));
+  });
+  update3DDynamic(forceLight);
+}
+function update3DDynamic(forceLight) {
+  if (!R3.ok || !NOW) { render3D(); return; }
+  const p = pal(forceLight), C = x => new THREE.Color(x);
+  disposeGroup(R3.dyn);
+  const r = sceneRadius(), dist = r * 1.6, s = NOW.s, c0 = [S.bld.ox, S.bld.oy];
+  // 태양 궤적 (선택한 날)
+  const P = params(), path = [];
+  for (let m = 240; m <= 1260; m += 10) { const sp = sunPosition(kstToUtc(P.year, S.t.doy, m), P.lat, P.lon); if (sp.alt < 0) continue; const v = sunVec(sp.alt, sp.az); path.push(T3(c0[0] + v[0] * dist, c0[1] + v[1] * dist, v[2] * dist)); }
+  if (path.length > 1) R3.dyn.add(new THREE.Line(lineGeo(path), new THREE.LineDashedMaterial({ color: C(p.sun), dashSize: 6, gapSize: 5, transparent: true, opacity: .7 })).computeLineDistances());
+  if (NOW.sun.alt > 0) {
+    const sunPos = T3(c0[0] + s[0] * dist, c0[1] + s[1] * dist, s[2] * dist);
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(Math.max(5, r * 0.035), 20, 14), new THREE.MeshBasicMaterial({ color: C(p.sun) }));
+    sun.position.copy(sunPos); R3.dyn.add(sun);
+    R3.dl.position.copy(sunPos); R3.dl.target.position.copy(T3(c0[0], c0[1], 0));
+    // 반사광
+    const lines = [], incident = [];
+    NOW.hits.forEach(h => {
+      const W = VSC.walls[h.w];
+      const pts = h.poly.map(([u, v]) => T3(W.Q[0] + u * W.t[0] + W.m[0] * 0.25, W.Q[1] + u * W.t[1] + W.m[1] * 0.25, v));
+      const pos = []; for (let k = 1; k < pts.length - 1; k++) [pts[0], pts[k], pts[k + 1]].forEach(v => pos.push(v.x, v.y, v.z));
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      R3.dyn.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: C(p.sun), transparent: true, opacity: .7, side: THREE.DoubleSide, depthWrite: false })));
+      R3.dyn.add(new THREE.LineLoop(lineGeo(pts), new THREE.LineBasicMaterial({ color: C(p.sun) })));
+      if (h.S && h.X) {
+        lines.push(T3(...h.S), T3(...h.X));
+        incident.push(T3(...h.S), T3(h.S[0] + s[0] * dist * 0.45, h.S[1] + s[1] * dist * 0.45, h.S[2] + s[2] * dist * 0.45));
+      }
+    });
+    if (lines.length) R3.dyn.add(new THREE.LineSegments(lineGeo(lines), new THREE.LineBasicMaterial({ color: C(p.sun) })));
+    if (incident.length) R3.dyn.add(new THREE.LineSegments(lineGeo(incident), new THREE.LineBasicMaterial({ color: C(p.sun), transparent: true, opacity: .35 })));
+  }
+  render3D();
+}
+function render3D() { if (R3.ok) R3.renderer.render(R3.scene, R3.cam); }
+function snapshot3D() {
+  if (!R3.ok) return null;
+  const el = $('view3d'), w0 = el.clientWidth || 900, h0 = el.clientHeight || 560;
+  R3.renderer.setSize(1200, 760, false); R3.cam.aspect = 1200 / 760; R3.cam.updateProjectionMatrix();
+  build3D(true); const url = R3.renderer.domElement.toDataURL('image/jpeg', 0.9);
+  R3.renderer.setSize(w0, h0, false); R3.cam.aspect = w0 / h0; R3.cam.updateProjectionMatrix(); build3D(false);
+  return url;
+}
+
+/* ===== 배치도 (2D) ===== */
+const PV = { s: 2, cx: 0, cy: 0, drag: null, draw: null };
+let SEL_NB = -1;
+function planFit() {
+  const cv = $('planCanvas'), w = cv.clientWidth || 800, h = cv.clientHeight || 500;
+  let bb = bboxOf(footprint()); S.nb.forEach(n => { const b = bboxOf(n.poly); bb = [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[2]), Math.max(bb[3], b[3])]; });
+  PV.cx = (bb[0] + bb[2]) / 2; PV.cy = (bb[1] + bb[3]) / 2;
+  PV.s = Math.min(w / (bb[2] - bb[0] + 60), h / (bb[3] - bb[1] + 60));
+}
+function w2s(x, y, v) { v = v || PV; return [v.W / 2 + (x - v.cx) * v.s, v.H / 2 - (y - v.cy) * v.s]; }
+function s2w(px, py) { return [PV.cx + (px - PV.W / 2) / PV.s, PV.cy - (py - PV.H / 2) / PV.s]; }
+function drawPlan(target) {
+  const cv = target ? target.cv : $('planCanvas'); if (!cv) return;
+  if (!target && $('tplan').hidden) return;
+  const p = pal(target && target.light);
+  const W = target ? target.W : cv.clientWidth, H = target ? target.H : cv.clientHeight; if (!W || !H) return;
+  const dpr = target ? 1 : Math.min(2, devicePixelRatio || 1);
+  cv.width = W * dpr; cv.height = H * dpr;
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  let V = PV;
+  if (target) { const save = { s: PV.s, cx: PV.cx, cy: PV.cy }; PV.W = W; PV.H = H; planFitTo(W, H, target.fit); V = { s: PV.s, cx: PV.cx, cy: PV.cy, W, H }; Object.assign(PV, save); }
+  else { PV.W = W; PV.H = H; V = PV; }
+  const S2 = (x, y) => w2s(x, y, V);
+  c.fillStyle = p.panel; c.fillRect(0, 0, W, H);
+  // 격자 10m
+  const step = V.s > 4 ? 10 : V.s > 1.2 ? 50 : 100;
+  const w0 = [V.cx - W / 2 / V.s, V.cy - H / 2 / V.s], w1 = [V.cx + W / 2 / V.s, V.cy + H / 2 / V.s];
+  c.strokeStyle = p.line; c.lineWidth = 1; c.globalAlpha = .6; c.beginPath();
+  for (let x = Math.floor(w0[0] / step) * step; x <= w1[0]; x += step) { const q = S2(x, 0); c.moveTo(q[0] + .5, 0); c.lineTo(q[0] + .5, H); }
+  for (let y = Math.floor(w0[1] / step) * step; y <= w1[1]; y += step) { const q = S2(0, y); c.moveTo(0, q[1] + .5); c.lineTo(W, q[1] + .5); }
+  c.stroke(); c.globalAlpha = 1;
+  const pathOf = poly => { c.beginPath(); poly.forEach((pt, i) => { const q = S2(pt[0], pt[1]); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.closePath(); };
+  // 최대 영향 거리 원
+  const cc = S2(S.bld.ox, S.bld.oy); c.setLineDash([4, 5]); c.strokeStyle = p.muted; c.globalAlpha = .5; c.beginPath(); c.arc(cc[0], cc[1], S.cfg.maxDist * V.s, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+  // 인접 건물
+  S.nb.forEach((n, i) => {
+    const hc = nbColor(i, p);
+    pathOf(n.poly); c.fillStyle = hc || p.nb; c.globalAlpha = hc ? .55 : 1; c.fill(); c.globalAlpha = 1;
+    c.strokeStyle = i === SEL_NB ? p.ink : p.nbEdge; c.lineWidth = i === SEL_NB ? 2 : 1; c.stroke();
+    const ce = polyCentroid(n.poly), q = S2(ce[0], ce[1]);
+    c.fillStyle = p.ink; c.font = '500 11.5px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(n.name, q[0], q[1] - 7); c.fillStyle = p.muted; c.font = '10.5px "IBM Plex Mono", monospace'; c.fillText(n.floors + 'F · ' + Math.round(n.h) + 'm', q[0], q[1] + 7);
+  });
+  // 반사광
+  if (NOW && NOW.sun.alt > 0 && VSC) {
+    c.strokeStyle = p.sun; c.lineWidth = 1.5;
+    NOW.hits.forEach(h => {
+      const Wl = VSC.walls[h.w], us = h.poly.map(v => v[0]), u0 = Math.min(...us), u1 = Math.max(...us);
+      const a = S2(Wl.Q[0] + u0 * Wl.t[0], Wl.Q[1] + u0 * Wl.t[1]), b = S2(Wl.Q[0] + u1 * Wl.t[0], Wl.Q[1] + u1 * Wl.t[1]);
+      c.lineWidth = 5; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+      if (h.S && h.X) { const s0 = S2(h.S[0], h.S[1]), x0 = S2(h.X[0], h.X[1]); c.lineWidth = 1.3; c.setLineDash([5, 3]); c.beginPath(); c.moveTo(s0[0], s0[1]); c.lineTo(x0[0], x0[1]); c.stroke(); c.setLineDash([]); }
+    });
+    // 태양 방향 화살표
+    const s = NOW.s, L = Math.min(W, H) * 0.42, hl = Math.hypot(s[0], s[1]) || 1, ex = cc[0] + s[0] / hl * L, ey = cc[1] - s[1] / hl * L;
+    c.strokeStyle = p.sun; c.globalAlpha = .55; c.lineWidth = 1.2; c.beginPath(); c.moveTo(cc[0], cc[1]); c.lineTo(ex, ey); c.stroke(); c.globalAlpha = 1;
+    c.fillStyle = p.sun; c.beginPath(); c.arc(ex, ey, 7, 0, Math.PI * 2); c.fill();
+  }
+  // 검토 건물
+  const fp = footprint(); pathOf(fp); c.fillStyle = p.glassSoft; c.fill(); c.strokeStyle = p.glass; c.lineWidth = 1.2; c.stroke();
+  facadeGeo().forEach(f => {
+    const a = S2(...f.A), b = S2(...f.B); c.strokeStyle = p.glass; c.lineWidth = 3.5; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    const m = S2((f.A[0] + f.B[0]) / 2 + f.n[0] * 7, (f.A[1] + f.B[1]) / 2 + f.n[1] * 7);
+    c.fillStyle = p.glass; c.font = '600 11px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(dirLabel(f.az), m[0], m[1]);
+  });
+  c.fillStyle = p.ink; c.font = '600 12px "IBM Plex Sans KR", sans-serif'; c.fillText('검토 건물', cc[0], cc[1]);
+  c.fillStyle = p.muted; c.font = '10.5px "IBM Plex Mono", monospace'; c.fillText(S.bld.floors + 'F · ' + fmt(bldH(), 0) + 'm', cc[0], cc[1] + 14);
+  // 그리기 중
+  if (PV.draw && !target) {
+    c.strokeStyle = p.ink; c.lineWidth = 1.5; c.setLineDash([4, 3]); c.beginPath();
+    PV.draw.pts.forEach((pt, i) => { const q = S2(pt[0], pt[1]); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); });
+    if (PV.draw.hover && PV.draw.pts.length) { const q = S2(...PV.draw.hover); c.lineTo(q[0], q[1]); }
+    c.stroke(); c.setLineDash([]);
+    PV.draw.pts.forEach(pt => { const q = S2(pt[0], pt[1]); c.fillStyle = p.ink; c.fillRect(q[0] - 3, q[1] - 3, 6, 6); });
+  }
+  // 방위표·축척
+  const nx = W - 34, ny = 46; c.fillStyle = p.ink; c.beginPath(); c.moveTo(nx, ny - 20); c.lineTo(nx - 7, ny); c.lineTo(nx + 7, ny); c.closePath(); c.fill();
+  c.font = '600 12px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'center'; c.fillText('N', nx, ny + 12);
+  const bar = step * V.s, bx = 16, by = H - 18; c.strokeStyle = p.ink; c.lineWidth = 2; c.beginPath(); c.moveTo(bx, by); c.lineTo(bx + bar, by); c.moveTo(bx, by - 4); c.lineTo(bx, by + 4); c.moveTo(bx + bar, by - 4); c.lineTo(bx + bar, by + 4); c.stroke();
+  c.fillStyle = p.ink; c.font = '10.5px "IBM Plex Mono", monospace'; c.textAlign = 'left'; c.fillText(step + ' m', bx + bar + 6, by);
+  if (target && target.label) { c.fillStyle = p.ink; c.font = '600 13px "IBM Plex Sans KR", sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText(target.label, 14, 12); }
+  if (target) return cv;
+}
+function planFitTo(w, h, fit) {
+  let bb = bboxOf(footprint()); S.nb.forEach((n, i) => { if (fit != null && fit !== i) return; const b = bboxOf(n.poly); bb = [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[2]), Math.max(bb[3], b[3])]; });
+  PV.cx = (bb[0] + bb[2]) / 2; PV.cy = (bb[1] + bb[3]) / 2; PV.s = Math.min(w / (bb[2] - bb[0] + 60), h / (bb[3] - bb[1] + 60));
+}
+function wirePlan() {
+  const cv = $('planCanvas');
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener('wheel', e => { e.preventDefault(); const [px, py] = pos(e), before = s2w(px, py); PV.s *= e.deltaY < 0 ? 1.15 : 1 / 1.15; PV.s = Math.max(0.1, Math.min(60, PV.s)); const after = s2w(px, py); PV.cx += before[0] - after[0]; PV.cy += before[1] - after[1]; drawPlan(); }, { passive: false });
+  cv.addEventListener('pointerdown', e => { const [px, py] = pos(e); PV.drag = { px, py, cx: PV.cx, cy: PV.cy, moved: false }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => {
+    const [px, py] = pos(e);
+    if (PV.drag) { const dx = px - PV.drag.px, dy = py - PV.drag.py; if (Math.abs(dx) + Math.abs(dy) > 4) PV.drag.moved = true; if (PV.drag.moved) { PV.cx = PV.drag.cx - dx / PV.s; PV.cy = PV.drag.cy + dy / PV.s; drawPlan(); } }
+    else if (PV.draw) { PV.draw.hover = s2w(px, py); drawPlan(); }
+  });
+  cv.addEventListener('pointerup', e => {
+    const d = PV.drag; PV.drag = null; if (!d || d.moved) return;
+    const [px, py] = pos(e), w = s2w(px, py);
+    if (PV.draw) {
+      const pts = PV.draw.pts;
+      if (pts.length >= 3) { const q = w2s(pts[0][0], pts[0][1]); if (Math.hypot(q[0] - px, q[1] - py) < 10) { finishDraw(); return; } }
+      pts.push([Math.round(w[0] * 10) / 10, Math.round(w[1] * 10) / 10]); drawPlan(); return;
+    }
+    SEL_NB = S.nb.findIndex(n => pip(w, n.poly)); renderNbTbl(); drawPlan(); build3D();
+  });
+  $('btnPlanFit').onclick = () => { planFit(); drawPlan(); };
+  $('btnDrawNb').onclick = () => { switchTab('tplan'); PV.draw = { pts: [], hover: null }; $('drawTag').hidden = false; $('btnDrawDone').hidden = false; $('btnDrawCancel').hidden = false; drawPlan(); };
+  $('btnDrawDone').onclick = finishDraw;
+  $('btnDrawCancel').onclick = endDraw;
+}
+function finishDraw() {
+  const pts = PV.draw ? PV.draw.pts : [];
+  if (pts.length >= 3) { const k = S.nb.length + 1; S.nb.push({ id: 'n' + Date.now().toString(36), name: '건물 ' + k, poly: pts.slice(), floors: 10, h: 10 * S.vw.fh, src: 'manual' }); SEL_NB = S.nb.length - 1; nbChanged(); toast('건물을 추가했습니다. 4단계 표에서 층수를 수정하세요.'); }
+  endDraw();
+}
+function endDraw() { PV.draw = null; $('drawTag').hidden = true; $('btnDrawDone').hidden = true; $('btnDrawCancel').hidden = true; drawPlan(); }
+
+/* ===== 탭 ===== */
+function switchTab(id) {
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === id ? 'true' : 'false'));
+  ['t3d', 'tplan', 'tres', 'trep'].forEach(t => { $(t).hidden = t !== id; });
+  if (id === 'tplan') { requestAnimationFrame(() => { if (!PV.W) planFit(); drawPlan(); }); }
+  if (id === 'tres' && RES) requestAnimationFrame(() => drawHeat($('heat'), HEAT_SEL, pal()));
+  if (id === 't3d') requestAnimationFrame(render3D);
+  if (id === 'trep' && RES) buildReport();
+}
+
+/* ===== DXF ===== */
+function parseDXF(text) {
+  const L = text.split(/\r?\n/); const pr = [];
+  for (let i = 0; i + 1 < L.length; i += 2) pr.push([parseInt(L[i].trim(), 10), L[i + 1].trim()]);
+  let insunits = null, i = 0; const blocks = {}, ents = [];
+  const readEntity = (arr, k) => { // returns [entity, nextIndex]
+    const type = pr[k][1], e = { type, layer: '0', v: [], codes: {} }; k++;
+    while (k < pr.length && pr[k][0] !== 0) {
+      const [c, v] = pr[k];
+      if (c === 8) e.layer = v;
+      else if (c === 10) e.v.push([parseFloat(v), null]);
+      else if (c === 20 && e.v.length) e.v[e.v.length - 1][1] = parseFloat(v);
+      else e.codes[c] = v;
+      k++;
+    }
+    return [e, k];
+  };
+  let section = null, curBlock = null;
+  while (i < pr.length) {
+    const [c, v] = pr[i];
+    if (c === 0 && v === 'SECTION') { section = pr[i + 1] ? pr[i + 1][1] : null; i += 2; continue; }
+    if (c === 0 && v === 'ENDSEC') { section = null; i++; continue; }
+    if (section === 'HEADER' && c === 9 && v === '$INSUNITS') { insunits = parseInt(pr[i + 1][1], 10); i += 2; continue; }
+    if (c === 0 && (section === 'ENTITIES' || section === 'BLOCKS')) {
+      if (v === 'BLOCK') { const [e, k] = readEntity(null, i); curBlock = { name: e.codes[2], base: e.v[0] || [0, 0], ents: [] }; blocks[curBlock.name] = curBlock; i = k; continue; }
+      if (v === 'ENDBLK') { curBlock = null; const [, k] = readEntity(null, i); i = k; continue; }
+      if (v === 'POLYLINE') {
+        const [e, k0] = readEntity(null, i); let k = k0; const pts = [];
+        while (k < pr.length && pr[k][1] === 'VERTEX') { const [vx, kk] = readEntity(null, k); if (vx.v[0]) pts.push(vx.v[0]); k = kk; }
+        if (k < pr.length && pr[k][1] === 'SEQEND') { const [, kk] = readEntity(null, k); k = kk; }
+        e.type = 'LWPOLYLINE'; e.v = pts; (curBlock ? curBlock.ents : ents).push(e); i = k; continue;
+      }
+      const [e, k] = readEntity(null, i); i = k;
+      if (['LWPOLYLINE', 'LINE', 'INSERT'].includes(e.type)) (curBlock ? curBlock.ents : (section === 'ENTITIES' ? ents : [])).push(e);
+      continue;
+    }
+    i++;
+  }
+  // 엔티티 → 닫힌 다각형 목록 (블록 전개)
+  const polys = [], lines = [];
+  const xf = (pt, T) => { const x = pt[0] * T.sx, y = pt[1] * T.sy, c = Math.cos(T.r), s = Math.sin(T.r); return [T.x + x * c - y * s, T.y + x * s + y * c]; };
+  const compose = (outer, inner) => p => outer(inner(p));
+  const walk = (list, fn, layerOverride, depth) => {
+    if (depth > 6) return;
+    list.forEach(e => {
+      const layer = (e.layer === '0' && layerOverride) ? layerOverride : e.layer;
+      if (e.type === 'LWPOLYLINE') {
+        const pts = e.v.filter(p => p[1] != null).map(fn);
+        const closed = (parseInt(e.codes[70] || '0', 10) & 1) === 1 || (pts.length > 3 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 1e-6);
+        if (pts.length >= 3 && closed) polys.push({ layer, pts });
+        else for (let k = 0; k + 1 < pts.length; k++) lines.push({ layer, a: pts[k], b: pts[k + 1] });
+      } else if (e.type === 'LINE') {
+        const a = [parseFloat(e.codes[10] || (e.v[0] && e.v[0][0]) || 0), 0];
+        const p0 = e.v[0], p1 = [parseFloat(e.codes[11]), parseFloat(e.codes[21])];
+        if (p0 && isFinite(p1[0])) lines.push({ layer, a: fn(p0), b: fn(p1) });
+      } else if (e.type === 'INSERT') {
+        const b = blocks[e.codes[2]]; if (!b) return;
+        const ip = e.v[0] || [0, 0];
+        const T = { x: ip[0], y: ip[1], sx: parseFloat(e.codes[41] || 1), sy: parseFloat(e.codes[42] || e.codes[41] || 1), r: parseFloat(e.codes[50] || 0) * D2R };
+        const inner = p => xf([p[0] - b.base[0], p[1] - b.base[1]], T);
+        walk(b.ents, compose(fn, inner), layer, depth + 1);
+      }
+    });
+  };
+  walk(ents, p => p, null, 0);
+  // LINE 이어 붙이기
+  const tol = 1e-3, byLayer = {};
+  lines.forEach(l => { (byLayer[l.layer] = byLayer[l.layer] || []).push(l); });
+  Object.entries(byLayer).forEach(([layer, ls]) => {
+    const used = new Array(ls.length).fill(false);
+    const scale = Math.max(1, ...ls.map(l => Math.max(Math.abs(l.a[0]), Math.abs(l.a[1])))) * 1e-6 + tol;
+    for (let s = 0; s < ls.length; s++) {
+      if (used[s]) continue; used[s] = true;
+      const loop = [ls[s].a, ls[s].b]; let guard = 0;
+      while (guard++ < 2000) {
+        const end = loop[loop.length - 1]; let found = false;
+        for (let k = 0; k < ls.length; k++) {
+          if (used[k]) continue;
+          const l = ls[k];
+          if (Math.hypot(l.a[0] - end[0], l.a[1] - end[1]) < scale) { loop.push(l.b); used[k] = true; found = true; break; }
+          if (Math.hypot(l.b[0] - end[0], l.b[1] - end[1]) < scale) { loop.push(l.a); used[k] = true; found = true; break; }
+        }
+        if (!found) break;
+        if (Math.hypot(loop[0][0] - loop[loop.length - 1][0], loop[0][1] - loop[loop.length - 1][1]) < scale) { loop.pop(); if (loop.length >= 3) polys.push({ layer, pts: loop }); break; }
+      }
+    }
+  });
+  const unitMap = { 1: 0.0254, 2: 0.3048, 4: 0.001, 5: 0.01, 6: 1 };
+  return { polys, unit: unitMap[insunits] || null };
+}
+const DXF = { plan: null, elev: null };
+function layerOpts(d, pick) {
+  const cnt = {}; d.polys.forEach(p => { cnt[p.layer] = (cnt[p.layer] || 0) + 1; });
+  const keys = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
+  const best = keys.find(k => pick.test(k)) || keys[0];
+  return keys.map(k => `<option value="${esc(k)}"${k === best ? ' selected' : ''}>${esc(k)} (${cnt[k]})</option>`).join('');
+}
+function dxfUnit(sel, d) { return sel === 'auto' ? (d.unit || 0.001) : parseFloat(sel); }
+function wireDXF() {
+  const read = (file, cb) => { const fr = new FileReader(); fr.onload = () => cb(fr.result); fr.readAsText(file); };
+  $('dxfPlan').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    read(f, t => {
+      try { DXF.plan = parseDXF(t); } catch (err) { toast('DXF를 읽지 못했습니다. ASCII DXF로 다시 저장해 주세요.'); return; }
+      if (!DXF.plan.polys.length) { toast('닫힌 외곽선을 찾지 못했습니다. 외곽선을 닫힌 폴리라인으로 그려 주세요.'); return; }
+      $('dxfPlanLayer').innerHTML = layerOpts(DXF.plan, /외곽|외벽|out|wall|bld|건물|A-WALL/i); $('btnDxfPlan').disabled = false;
+      showDxfInfo(`평면 DXF: 닫힌 도형 ${DXF.plan.polys.length}개, 단위 ${DXF.plan.unit ? (DXF.plan.unit === 1 ? 'm' : DXF.plan.unit === 0.001 ? 'mm' : DXF.plan.unit + 'm') : '미지정(mm로 가정)'}`);
+    });
+  };
+  $('btnDxfPlan').onclick = () => {
+    const d = DXF.plan; if (!d) return; const layer = $('dxfPlanLayer').value, u = dxfUnit($('dxfPlanUnit').value, d);
+    const cand = d.polys.filter(p => p.layer === layer).sort((a, b) => Math.abs(polyArea(b.pts)) - Math.abs(polyArea(a.pts)))[0];
+    if (!cand) return;
+    applyPlanPoly(cand.pts.map(p => [p[0] * u, p[1] * u]));
+  };
+  $('dxfElev').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    read(f, t => {
+      try { DXF.elev = parseDXF(t); } catch (err) { toast('DXF를 읽지 못했습니다.'); return; }
+      if (!DXF.elev.polys.length) { toast('닫힌 도형을 찾지 못했습니다.'); return; }
+      $('dxfElevOut').innerHTML = layerOpts(DXF.elev, /외곽|out|elev|입면|wall/i);
+      $('dxfElevGlass').innerHTML = layerOpts(DXF.elev, /glass|glaz|유리|창|win|cw/i);
+      $('btnDxfElev').disabled = false;
+      showDxfInfo(`입면 DXF: 닫힌 도형 ${DXF.elev.polys.length}개`);
+    });
+  };
+  $('btnDxfElev').onclick = () => {
+    const d = DXF.elev; if (!d) return; const u = dxfUnit($('dxfElevUnit').value, d);
+    const outs = d.polys.filter(p => p.layer === $('dxfElevOut').value).sort((a, b) => Math.abs(polyArea(b.pts)) - Math.abs(polyArea(a.pts)));
+    if (!outs.length) return; const out = outs[0].pts;
+    const gl = d.polys.filter(p => p.layer === $('dxfElevGlass').value && p.pts !== out && pip(polyCentroid(p.pts), out));
+    applyElev(+$('dxfElevFac').value, Math.abs(polyArea(out)) * u * u, gl.reduce((s, p) => s + Math.abs(polyArea(p.pts)), 0) * u * u, (bboxOf(out)[3] - bboxOf(out)[1]) * u, $('dxfElevH').checked, gl.length);
+  };
+}
+function showDxfInfo(t) { $('dxfInfo').hidden = false; $('dxfInfo').textContent = t; }
+function applyPlanPoly(ptsM) {
+  const c = polyCentroid(ptsM); const pts = ptsM.map(p => [Math.round((p[0] - c[0]) * 100) / 100, Math.round((p[1] - c[1]) * 100) / 100]);
+  S.bld.shape = 'poly'; S.bld.polyText = pts.map(p => p[0] + ', ' + p[1]).join('\n');
+  S.fac = []; refreshInputs(); markStale(); geometryChanged(); renderSummaries(); save();
+  const a = Math.abs(polyArea(pts)); toast(`평면 외곽 적용: ${pts.length}개 입면, 기준층 ${fmt(a, 1)}㎡`);
+}
+function applyElev(fi, outA, glA, hM, useH, nGlass) {
+  if (!(outA > 0)) return;
+  const wwr = Math.max(0, Math.min(100, Math.round(glA / outA * 1000) / 10));
+  syncFac(); if (S.fac[fi]) S.fac[fi].wwr = wwr;
+  let msg = `${dirLabel(facadeGeo()[fi].az)} 입면 유리 비율 ${wwr}% 적용 (유리 ${nGlass != null ? nGlass + '개, ' : ''}${fmt(glA, 1)}㎡ / 입면 ${fmt(outA, 1)}㎡)`;
+  if (useH && hM > 1) { S.bld.fh = Math.round(hM / S.bld.floors * 100) / 100; refreshInputs(); markStale(); geometryChanged(); msg += `, 층고 ${S.bld.fh}m`; }
+  renderFacTbl(); afterGlass(); toast(msg);
+}
+
+/* ===== 도면 이미지 추적 ===== */
+const TR = { src: null, w: 0, h: 0, z: 1, px: 0, py: 0, mode: 'scale', sc: [], scale: null, outline: [], outClosed: false, glass: [], cur: [], drag: null, pdf: null };
+async function openTracer(file) {
+  TR.scale = null; TR.sc = []; TR.outline = []; TR.outClosed = false; TR.glass = []; TR.cur = []; TR.pdf = null; $('trPage').hidden = true;
+  if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
+    try { await loadPdfJs(); } catch (e) { toast('PDF 모듈을 불러오지 못했습니다. 이미지(JPG·PNG)로 변환해 올려 주세요.'); return; }
+    const buf = await file.arrayBuffer();
+    try { TR.pdf = await pdfjsLib.getDocument({ data: buf }).promise; } catch (e) { toast('PDF를 열지 못했습니다.'); return; }
+    if (TR.pdf.numPages > 1) { $('trPage').innerHTML = Array.from({ length: TR.pdf.numPages }, (_, i) => `<option value="${i + 1}">${i + 1}쪽</option>`).join(''); $('trPage').hidden = false; }
+    await renderPdfPage(1);
+  } else {
+    const url = URL.createObjectURL(file); const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; }).catch(() => { toast('이미지를 열지 못했습니다.'); });
+    TR.src = img; TR.w = img.naturalWidth; TR.h = img.naturalHeight;
+  }
+  $('tracer').hidden = false; trMode('scale'); requestAnimationFrame(() => { trFit(); trDraw(); });
+}
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { try { const blob = new Blob(["importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js');"], { type: 'application/javascript' }); pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob); } catch (e) { } res(); };
+    s.onerror = rej; document.head.appendChild(s);
+  });
+}
+async function renderPdfPage(n) {
+  const page = await TR.pdf.getPage(n); const vp = page.getViewport({ scale: 2 });
+  const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+  await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+  TR.src = cv; TR.w = cv.width; TR.h = cv.height;
+}
+function trFit() { const cv = $('trCanvas'), W = cv.clientWidth, H = cv.clientHeight; TR.z = Math.min(W / TR.w, H / TR.h) * 0.95; TR.px = (W - TR.w * TR.z) / 2; TR.py = (H - TR.h * TR.z) / 2; }
+function trMode(m) { TR.mode = m; document.querySelectorAll('[data-tr]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tr === m ? 'true' : 'false')); if (m !== 'glass') TR.cur = TR.mode === 'outline' && !TR.outClosed ? TR.outline : []; trStat(); }
+function trStat() {
+  const s = TR.scale, el = $('trStat'); const a = p => Math.abs(polyArea(p)) * s * s;
+  let t = s ? `축척 ${fmt(s * 1000, 2)} mm/px` : '두 점을 클릭한 뒤 그 사이 실제 길이(mm)를 입력하세요.';
+  if (s && TR.outClosed) t += ` · 외곽 ${fmt(a(TR.outline), 1)}㎡`;
+  if (s && TR.glass.length) { const g = TR.glass.reduce((x, p) => x + a(p), 0); t += ` · 유리 ${TR.glass.length}개 ${fmt(g, 1)}㎡`; if (TR.outClosed) t += ` · 유리 비율 ${fmt(g / a(TR.outline) * 100, 1)}%`; }
+  if (TR.mode === 'outline' && !TR.outClosed) t += ' · 외곽 꼭짓점을 차례로 클릭, 첫 점을 누르면 닫힙니다';
+  if (TR.mode === 'glass') t += ' · 유리 영역마다 꼭짓점 클릭 후 첫 점으로 닫기';
+  el.textContent = t;
+  const elev = $('trPurpose').value === 'elev'; $('trFac').hidden = !elev; $('trHwrap').hidden = !elev;
+}
+function trDraw() {
+  const cv = $('trCanvas'), W = cv.clientWidth, H = cv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1); if (!W) return;
+  cv.width = W * dpr; cv.height = H * dpr; const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const p = pal(); c.fillStyle = p.sunk; c.fillRect(0, 0, W, H);
+  if (TR.src) c.drawImage(TR.src, TR.px, TR.py, TR.w * TR.z, TR.h * TR.z);
+  const S2 = q => [TR.px + q[0] * TR.z, TR.py + q[1] * TR.z];
+  const poly = (pts, closed, stroke, fill) => { if (!pts.length) return; c.beginPath(); pts.forEach((q, i) => { const s = S2(q); i ? c.lineTo(s[0], s[1]) : c.moveTo(s[0], s[1]); }); if (closed) c.closePath(); if (fill) { c.fillStyle = fill; c.globalAlpha = .28; c.fill(); c.globalAlpha = 1; } c.strokeStyle = stroke; c.lineWidth = 2; c.stroke(); pts.forEach(q => { const s = S2(q); c.fillStyle = stroke; c.fillRect(s[0] - 3, s[1] - 3, 6, 6); }); };
+  poly(TR.outline, TR.outClosed, p.glass, TR.outClosed ? p.glass : null);
+  TR.glass.forEach(g => poly(g, true, p.sun, p.sun));
+  if (TR.mode === 'glass') poly(TR.cur, false, p.sun);
+  if (TR.sc.length) { poly(TR.sc, false, p.bad); }
+}
+function wireTracer() {
+  const cv = $('trCanvas');
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const toImg = ([x, y]) => [(x - TR.px) / TR.z, (y - TR.py) / TR.z];
+  document.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => trMode(b.dataset.tr));
+  cv.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = pos(e), k = e.deltaY < 0 ? 1.15 : 1 / 1.15; TR.px = x - (x - TR.px) * k; TR.py = y - (y - TR.py) * k; TR.z *= k; trDraw(); }, { passive: false });
+  cv.addEventListener('pointerdown', e => { const [x, y] = pos(e); TR.drag = { x, y, px: TR.px, py: TR.py, moved: false, pan: TR.mode === 'pan' || e.button === 1 || e.shiftKey }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (!TR.drag) return; const [x, y] = pos(e), dx = x - TR.drag.x, dy = y - TR.drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) TR.drag.moved = true; if (TR.drag.moved && (TR.drag.pan || TR.mode === 'pan')) { TR.px = TR.drag.px + dx; TR.py = TR.drag.py + dy; trDraw(); } });
+  cv.addEventListener('pointerup', e => {
+    const d = TR.drag; TR.drag = null; if (!d || d.moved || d.pan) return;
+    const sp = pos(e), q = toImg(sp);
+    const nearFirst = pts => pts.length >= 3 && Math.hypot(TR.px + pts[0][0] * TR.z - sp[0], TR.py + pts[0][1] * TR.z - sp[1]) < 10;
+    if (TR.mode === 'scale') {
+      if (TR.sc.length >= 2) TR.sc = [];
+      TR.sc.push(q);
+      if (TR.sc.length === 2) { const px = Math.hypot(TR.sc[1][0] - TR.sc[0][0], TR.sc[1][1] - TR.sc[0][1]), mm = parseFloat($('trLen').value); if (px > 2 && mm > 0) { TR.scale = mm / 1000 / px; trMode('outline'); toast('축척을 지정했습니다. 외곽선을 따 주세요.'); } }
+    } else if (TR.mode === 'outline') {
+      if (TR.outClosed) { TR.outline = []; TR.outClosed = false; }
+      if (nearFirst(TR.outline)) { TR.outClosed = true; } else TR.outline.push(q);
+    } else if (TR.mode === 'glass') {
+      if (nearFirst(TR.cur)) { TR.glass.push(TR.cur); TR.cur = []; } else TR.cur.push(q);
+    }
+    trStat(); trDraw();
+  });
+  $('trLen').onchange = () => { if (TR.sc.length === 2) { const px = Math.hypot(TR.sc[1][0] - TR.sc[0][0], TR.sc[1][1] - TR.sc[0][1]), mm = parseFloat($('trLen').value); if (px > 2 && mm > 0) TR.scale = mm / 1000 / px; trStat(); } };
+  $('trUndo').onclick = () => { if (TR.mode === 'glass') { if (TR.cur.length) TR.cur.pop(); else TR.glass.pop(); } else if (TR.mode === 'outline') { TR.outClosed = false; TR.outline.pop(); } else TR.sc.pop(); trStat(); trDraw(); };
+  $('trClear').onclick = () => { if (TR.mode === 'glass') { TR.glass = []; TR.cur = []; } else if (TR.mode === 'outline') { TR.outline = []; TR.outClosed = false; } else { TR.sc = []; TR.scale = null; } trStat(); trDraw(); };
+  $('trClose').onclick = () => { $('tracer').hidden = true; };
+  $('trPurpose').onchange = trStat;
+  $('trPage').onchange = async e => { await renderPdfPage(+e.target.value); trFit(); trDraw(); };
+  $('trApply').onclick = () => {
+    if (!TR.scale) { toast('먼저 축척을 지정하세요.'); return; }
+    if (!TR.outClosed) { toast('외곽선을 닫아 주세요 (첫 점 클릭).'); return; }
+    const s = TR.scale;
+    if ($('trPurpose').value === 'plan') { applyPlanPoly(TR.outline.map(q => [q[0] * s, -q[1] * s])); $('tracer').hidden = true; }
+    else {
+      const outA = Math.abs(polyArea(TR.outline)) * s * s, gA = TR.glass.reduce((x, p) => x + Math.abs(polyArea(p)), 0) * s * s;
+      const bb = bboxOf(TR.outline); applyElev(+$('trFac').value, outA, gA, (bb[3] - bb[1]) * s, $('trH').checked, TR.glass.length); $('tracer').hidden = true;
+    }
+  };
+  $('imgFile').onchange = e => { const f = e.target.files[0]; if (f) openTracer(f); e.target.value = ''; };
+  new ResizeObserver(() => { if (!$('tracer').hidden) trDraw(); }).observe(cv);
+}
+function setIMode(m) {
+  document.querySelectorAll('[data-imode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.imode === m ? 'true' : 'false'));
+  document.querySelectorAll('[data-ipanel]').forEach(p => { p.hidden = p.dataset.ipanel !== m; });
+}
+
+/* ===== VWorld ===== */
+function vwBox() {
+  const r = +S.vw.radius || 300, lat = +S.site.lat, lon = +S.site.lon;
+  const dLat = r / 110540, dLon = r / (111320 * Math.cos(lat * D2R));
+  const c = [lon + S.bld.ox / (111320 * Math.cos(lat * D2R)), lat + S.bld.oy / 110540];
+  return [c[0] - dLon, c[1] - dLat, c[0] + dLon, c[1] + dLat].map(v => v.toFixed(6));
+}
+function vwDataUrl() {
+  const b = vwBox();
+  return `https://api.vworld.kr/req/data?service=data&version=2.0&request=GetFeature&format=json&errorformat=json&size=1000&page=1&data=${encodeURIComponent(S.vw.layer || 'LT_C_SPBD')}&geomfilter=BOX(${b.join(',')})&geometry=true&attribute=true&crs=EPSG:4326&key=${encodeURIComponent(S.vw.key)}${S.vw.domain ? '&domain=' + encodeURIComponent(S.vw.domain) : ''}`;
+}
+function vwGeoUrl() {
+  return `https://api.vworld.kr/req/address?service=address&request=getcoord&version=2.0&crs=epsg:4326&refine=true&simple=false&format=json&type=road&address=${encodeURIComponent(S.site.addr)}&key=${encodeURIComponent(S.vw.key)}${S.vw.domain ? '&domain=' + encodeURIComponent(S.vw.domain) : ''}`;
+}
+async function vwFetch(url, label) {
+  if (!S.vw.key) { toast('4단계에 VWorld 인증키를 먼저 입력하세요 (vworld.kr에서 무료 발급).'); $('vwKey').focus(); return null; }
+  try {
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 9000);
+    const r = await fetch(url, { signal: ctl.signal }); clearTimeout(tm);
+    return await r.json();
+  } catch (e) {
+    $('vwFallback').hidden = false; $('vwUrl').textContent = url;
+    $('vwMsg').innerHTML = `<b>${label}</b> — 이 화면에서는 외부 API를 직접 호출할 수 없습니다. 아래 주소를 새 브라우저 탭에서 열고, 나온 결과 전체를 복사해 붙여넣어 주세요.`;
+    return null;
+  }
+}
+function handleVw(obj) {
+  if (!obj) return;
+  const resp = obj.response || obj;
+  if (resp.status && resp.status !== 'OK') { const er = resp.error ? (resp.error.text || resp.error.code) : resp.status; toast('VWorld 응답 오류: ' + er); return; }
+  const pt = resp.result && resp.result.point;
+  if (pt && pt.x) { S.site.lat = Math.round(+pt.y * 1e6) / 1e6; S.site.lon = Math.round(+pt.x * 1e6) / 1e6; refreshInputs(); markStale(); geometryChanged(); renderSummaries(); save(); toast('좌표 반영: ' + S.site.lat + ', ' + S.site.lon); $('vwFallback').hidden = true; return; }
+  const fc = (resp.result && resp.result.featureCollection) || (obj.type === 'FeatureCollection' ? obj : null);
+  if (!fc || !fc.features) { toast('건물 데이터나 좌표를 찾지 못했습니다. 응답 전체를 붙여넣었는지 확인하세요.'); return; }
+  importFeatures(fc.features); $('vwFallback').hidden = true;
+}
+function importFeatures(features) {
+  const lat0 = +S.site.lat, lon0 = +S.site.lon, kx = 111320 * Math.cos(lat0 * D2R), ky = 110540;
+  const fp = footprint(), out = []; let skipped = 0, noFloor = 0;
+  features.forEach((f, idx) => {
+    const g = f.geometry; if (!g) return;
+    let rings = [];
+    if (g.type === 'Polygon') rings = [g.coordinates[0]];
+    else if (g.type === 'MultiPolygon') rings = g.coordinates.map(p => p[0]);
+    rings.forEach(ring => {
+      if (!ring || ring.length < 4) return;
+      if (Math.abs(ring[0][0]) > 180) { skipped++; return; } // 투영좌표는 지원하지 않음
+      const poly = ring.slice(0, -1).map(c => [Math.round((c[0] - lon0) * kx * 10) / 10, Math.round((c[1] - lat0) * ky * 10) / 10]);
+      if (Math.abs(polyArea(poly)) < 15) return;
+      const ce = polyCentroid(poly);
+      if (pip(ce, fp)) { skipped++; return; }
+      if (Math.hypot(ce[0] - S.bld.ox, ce[1] - S.bld.oy) > (+S.vw.radius || 300) * 1.45) return;
+      const pr = f.properties || {};
+      const fl = [pr.gro_flo_co, pr.grnd_flr, pr.GRND_FLR, pr.flr_co, pr.floors, pr.FLOORS].map(Number).find(v => isFinite(v) && v > 0);
+      const ht = [pr.height, pr.HEIGHT, pr.bld_hgt, pr.hgt].map(Number).find(v => isFinite(v) && v > 0);
+      const floors = fl || (ht ? Math.max(1, Math.round(ht / S.vw.fh)) : 1); if (!fl && !ht) noFloor++;
+      const nm = pr.buld_nm || pr.bld_nm || pr.bd_nm || pr.BULD_NM || pr.name || '';
+      out.push({ id: 'v' + idx + '_' + out.length, name: (nm && nm.trim()) || ('건물 ' + (out.length + 1)), poly, floors, h: ht || floors * S.vw.fh, src: 'vworld' });
+    });
+  });
+  if (!out.length) { toast('반경 안에서 건물을 찾지 못했습니다.' + (skipped ? ' (투영좌표 또는 대지 내 건물 ' + skipped + '개 제외)' : '')); return; }
+  S.nb = S.nb.filter(n => n.src === 'manual').concat(out);
+  SEL_NB = -1; nbChanged(); planFit(); resetCam();
+  toast(`인접 건물 ${out.length}개동을 불러왔습니다.` + (noFloor ? ` 층수 정보가 없는 ${noFloor}개동은 1층으로 두었으니 확인해 주세요.` : ''));
+}
+function wireVw() {
+  $('btnVworld').onclick = async () => { const o = await vwFetch(vwDataUrl(), '주변 건물 조회'); if (o) handleVw(o); };
+  $('btnGeocode').onclick = async () => { const o = await vwFetch(vwGeoUrl(), '주소 → 좌표 변환'); if (o) handleVw(o); };
+  $('btnCopyUrl').onclick = async () => { const t = $('vwUrl').textContent; try { await navigator.clipboard.writeText(t); toast('주소를 복사했습니다.'); } catch (e) { const r = document.createRange(); r.selectNodeContents($('vwUrl')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('주소를 선택했습니다. Ctrl+C로 복사하세요.'); } };
+  $('btnVwPaste').onclick = () => { const t = $('vwPaste').value.trim(); if (!t) return; let o; try { o = JSON.parse(t.replace(/^[^({]*\(/, '').replace(/\)\s*;?\s*$/, '')); } catch (e) { toast('JSON 형식이 아닙니다. 결과 전체를 그대로 붙여넣어 주세요.'); return; } handleVw(o); $('vwPaste').value = ''; };
+  $('geoFile').onchange = e => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = () => { try { handleVw(JSON.parse(fr.result)); } catch (err) { toast('GeoJSON을 읽지 못했습니다.'); } }; fr.readAsText(f); e.target.value = ''; };
+}
+
+/* ===== 저장 ===== */
+let DL = null;
+async function saveFile(filename, data) {
+  if (DL === null) { try { DL = await window.claude?.use?.('downloads'); } catch (e) { DL = null; } DL = DL || false; }
+  if (!DL) { toast('이 화면에서는 파일 저장을 쓸 수 없습니다.'); return false; }
+  try { await DL.save({ filename, data }); return true; }
+  catch (e) { if (e && e.code === 'declined') return false; toast('저장하지 못했습니다' + (e && e.message ? ': ' + e.message : '')); return false; }
+}
+function wireSave() {
+  $('btnSaveProj').onclick = () => saveFile(($('projName').value || '현휘분석') + '.json', JSON.stringify(Object.assign({}, S, { proj: $('projName').value }), null, 1));
+  $('projFile').onchange = e => {
+    const f = e.target.files[0]; if (!f) return; const fr = new FileReader();
+    fr.onload = () => { try { const o = JSON.parse(fr.result); if (!o || o.v !== 1) throw 0; S = Object.assign(DEFAULT(), o); if (o.proj) $('projName').value = o.proj; RES = null; STALE = true; boot(true); toast('프로젝트를 불러왔습니다. 분석 실행을 눌러 주세요.'); } catch (err) { toast('이 프로그램에서 저장한 JSON 파일이 아닙니다.'); } };
+    fr.readAsText(f); e.target.value = '';
+  };
+  $('btnRepSave').onclick = () => { if (!RES) { toast('먼저 분석을 실행하세요.'); return; } const sc = repScope(); saveFile(($('projName').value || '현휘분석') + (typeof sc === 'number' ? '_' + RES.names[sc] : sc === 'all' ? '_동별상세' : '') + '_현휘검토서.html', buildReport(true)); };
+  $('repScope').onchange = () => { if (RES) buildReport(); };
+  $('btnCsv').onclick = () => {
+    if (!RES) { toast('먼저 분석을 실행하세요.'); return; }
+    const y = RES.P.year, rows = [['건물', '날짜', '시각(KST)', '반사 도달면적(㎡)', '최대 반사 일사강도(W/㎡)', '등급', '원인 입면', '태양고도(°)', '태양방위(°)']];
+    const P = RES.P2; const list = [...RES.ag.keyMap.values()].filter(o => o.a >= P.minArea).sort((a, b) => a.r - b.r || a.d - b.d || a.m - b.m);
+    list.forEach(o => { const dt = dateOf(y, o.d); rows.push([RES.names[o.r], `${y}-${String(dt.m).padStart(2, '0')}-${String(dt.d).padStart(2, '0')}`, hhmm(o.m), o.a.toFixed(1), o.I.toFixed(0), o.I >= P.iHigh ? '강' : o.I >= P.iLow ? '중' : '약', dirLabel(RES.fac[o.f].az), o.alt.toFixed(1), o.az.toFixed(1)]); });
+    saveFile(($('projName').value || '현휘분석') + '_시각별.csv', '﻿' + rows.map(r => r.map(v => /[",\n]/.test(v) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n'));
+  };
+}
+
+/* ===== 리포트 ===== */
+const REP_CSS = `.rep{font-family:"IBM Plex Sans KR","Malgun Gothic",sans-serif;color:#1b232c;font-size:13.5px;line-height:1.65;max-width:900px;margin:0 auto}
+.rep h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}.rep .meta{color:#5a6776;font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px 18px;border-bottom:2px solid #1b232c;padding-bottom:12px;margin-bottom:18px}
+.rep h2{font-size:15.5px;margin:26px 0 8px;padding-bottom:4px;border-bottom:1px solid #d6dce3}.rep h2 span{color:#22788a;font-family:"IBM Plex Mono",monospace;margin-right:8px}
+.rep table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0}.rep th,.rep td{border:1px solid #d6dce3;padding:5px 7px;text-align:center}.rep th{background:#f1f4f7;font-weight:600}
+.rep td.l,.rep th.l{text-align:left}.rep .num{font-family:"IBM Plex Mono",monospace}.rep img{max-width:100%;border:1px solid #d6dce3;border-radius:4px;display:block}
+.rep .figs{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rep .cap{font-size:11.5px;color:#5a6776;margin:4px 0 0}
+.rep .kp{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}.rep .kp div{border:1px solid #d6dce3;border-radius:4px;padding:8px 10px}.rep .kp b{display:block;font-family:"IBM Plex Mono",monospace;font-size:19px;font-weight:500}.rep .kp span{font-size:11.5px;color:#5a6776}
+.rep .bad{color:#c8402f;font-weight:600}.rep .warn{color:#a57a0d;font-weight:600}.rep .ok{color:#2e8a57}
+.rep ul{padding-left:18px;margin:6px 0}.rep .note{font-size:12px;color:#5a6776}
+.rep .bar{display:flex;align-items:center;gap:8px}.rep .bar i{display:inline-block;height:10px;background:#d9821a;border-radius:2px}
+.rep .bsec{border-top:1px dashed #c4cad2;margin-top:22px;padding-top:2px}.rep .bsec h2 em.pl{font-style:normal;font-size:11.5px;font-weight:600;border:1px solid;border-radius:9px;padding:0 8px;margin-left:8px;vertical-align:2px}
+.rep .bsec h2 em.bad{color:#fff;background:#c8402f;border-color:#c8402f}.rep .bsec h2 em.warn{color:#a57a0d}.rep .bsec h2 em.ok{color:#2e8a57}
+.rep .mo{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:end;height:126px;margin-bottom:8px}.rep .mo div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.rep .mo i{display:block;width:70%;background:#22788a;border-radius:2px 2px 0 0;min-height:1px}.rep .mo span,.rep .mo em{font-size:10px;color:#5a6776;font-style:normal;font-family:"IBM Plex Mono",monospace}
+@media (max-width:640px){.rep .figs,.rep .kp{grid-template-columns:1fr 1fr}}
+@media print{.rep .bsec,.rep .pb{break-before:page}.rep h2{break-after:avoid}.rep table,.rep img{break-inside:avoid}}`;
+function bldDetail(i) {
+  const P = RES.P2, R = RES.ag.rec[i], step = RES.P.minStep, ds = RES.P.dayStep, days = new Map();
+  const list = [];
+  for (const o of RES.ag.keyMap.values()) {
+    if (o.r !== i || o.a < P.minArea) continue; list.push(o);
+    let d = days.get(o.d); if (!d) { d = { d: o.d, s: o.m, e: o.m, n: 0, I: 0 }; days.set(o.d, d); }
+    d.s = Math.min(d.s, o.m); d.e = Math.max(d.e, o.m); d.n++; d.I = Math.max(d.I, o.I);
+  }
+  const topDays = [...days.values()].sort((a, b) => b.n - a.n || b.I - a.I).slice(0, 5);
+  // 피해 벽면 방향·높이 (발생 시점 표본)
+  const walls = {}; let z0 = Infinity, z1 = -Infinity;
+  const canGeo = VSC && S.nb.length === RES.names.length;
+  if (canGeo && list.length) {
+    const stepN = Math.max(1, Math.floor(list.length / 60)), par = params();
+    for (let k = 0; k < list.length; k += stepN) {
+      const o = list[k]; const r = hitsAt(VSC, par, o.d, o.m, true);
+      r.hits.forEach(h => { if (h.rec !== i) return; const W = VSC.walls[h.w], az = (Math.atan2(W.m[0], W.m[1]) * R2D + 360) % 360, key = dirLabel(az); walls[key] = (walls[key] || 0) + 1; h.poly.forEach(v => { z0 = Math.min(z0, v[1]); z1 = Math.max(z1, v[1]); }); });
+    }
+  }
+  const info = RES.nbInfo[i], fh = info.floors ? info.h / info.floors : 3;
+  const floorRange = isFinite(z0) ? [Math.max(1, Math.floor(z0 / fh) + 1), Math.min(info.floors, Math.max(1, Math.ceil(z1 / fh)))] : null;
+  const facH = Object.entries(R.fac).map(([f, c]) => ({ f: +f, h: c * step * ds / 60 })).sort((a, b) => b.h - a.h);
+  const nb = S.nb[i], fp = footprint(); let dist = null, dir = null;
+  if (nb && S.nb.length === RES.names.length) { const cn = polyCentroid(nb.poly), cm = polyCentroid(fp); dist = Math.hypot(cn[0] - cm[0], cn[1] - cm[1]); dir = dirLabel((Math.atan2(cn[0] - cm[0], cn[1] - cm[1]) * R2D + 360) % 360); }
+  const cmp = RES.cmp.map(c => ({ g: c.g, r: c.rec[i] })).sort((a, b) => a.g.R - b.g.R);
+  return { R, topDays, walls, floorRange, facH, dist, dir, cmp, info };
+}
+function bldOpinion(i, D) {
+  const y = RES.P.year, R = D.R, name = RES.names[i], j = judge(R), out = [];
+  if (!R.hours) { out.push(`${name}에는 분석 기간 중 반사광이 도달하지 않습니다.`); return out; }
+  const f0 = D.facH[0], wl = Object.entries(D.walls).sort((a, b) => b[1] - a[1]).map(e => e[0] + '측');
+  out.push(`${name}은 검토 건물 ${D.dir || ''}쪽 약 ${fmt(D.dist, 0)}m에 있으며, ${f0 ? dirLabel(RES.fac[f0.f].az) + ' 입면' : '유리 입면'}의 반사광을 주로 받습니다${wl.length ? ` (${wl.slice(0, 2).join('·')} 벽면${D.floorRange ? `, ${D.floorRange[0]}~${D.floorRange[1]}층 높이` : ''})` : ''}.`);
+  out.push(`반사광은 연간 ${fmt(R.hours, 1)}시간, ${R.nDays}일 닿으며 ${mdStr(y, R.first)}~${mdStr(y, R.last)} 사이 ${hhmm(R.minM)}–${hhmm(R.maxM + RES.P.minStep)}에 나타납니다. 이 중 세기 ${S.cfg.iLow} W/㎡ 이상은 연간 ${fmt(R.midH, 1)}시간(${R.nDaysMid}일)${R.maxDailyMid ? `, 가장 긴 날은 ${mdStr(y, R.maxDayMid)}로 ${R.maxDailyMid}분` : ''}입니다.`);
+  out.push(j.k === 'bad' ? `참고 기준(세기 ${S.cfg.iLow} W/㎡ 이상 반사 1일 ${S.cfg.dailyLim}분 또는 연 ${S.cfg.annualLim}시간)을 넘어 저감 대책 검토가 필요합니다.` : `참고 기준(세기 ${S.cfg.iLow} W/㎡ 이상 반사 1일 ${S.cfg.dailyLim}분, 연 ${S.cfg.annualLim}시간) 이내입니다.`);
+  const cur = D.cmp.find(c => c.g.id === S.defGlass), lo = D.cmp[0];
+  if (cur && lo && lo.g.id !== cur.g.id) out.push(`${lo.g.name}(${lo.g.R}%) 적용 시 이 동의 '강' 등급 시간은 ${fmt(cur.r.strongH, 1)}h → ${fmt(lo.r.strongH, 1)}h, 최대 강도는 ${fmt(cur.r.maxI, 0)} → ${fmt(lo.r.maxI, 0)} W/㎡로 낮아집니다.`);
+  if (f0 && D.facH.length > 1 && f0.h / D.facH.reduce((s, x) => s + x.h, 0) > 0.6) out.push(`영향의 대부분이 ${dirLabel(RES.fac[f0.f].az)} 입면에서 오므로, 이 입면만 저반사 유리로 바꿔도 효과가 큽니다.`);
+  return out;
+}
+function bldSection(i, num) {
+  const y = RES.P.year, P = RES.P2, D = bldDetail(i), R = D.R, j = judge(R), name = RES.names[i];
+  const heat = (() => { const cv = document.createElement('canvas'); drawHeat(cv, i, LIGHT, [1100, 240]); return cv.toDataURL('image/png'); })();
+  let plan = null;
+  if (S.nb.length === RES.names.length && R.peak) {
+    const keepNow = NOW, keepSel = SEL_NB; NOW = hitsAt(VSC, params(), R.peak.d, R.peak.m, true); SEL_NB = i;
+    const cv = document.createElement('canvas'); drawPlan({ cv, W: 760, H: 500, light: true, fit: i, label: `${mdStr(y, R.peak.d)} ${hhmm(R.peak.m)} · 최대 강도 시점` }); plan = cv.toDataURL('image/jpeg', 0.88);
+    NOW = keepNow; SEL_NB = keepSel;
+  }
+  const mh = R.month.map(v => v / 60), mmx = Math.max(1, ...mh);
+  const months = `<div class="mo">${mh.map((v, k) => `<div><em>${v >= 0.05 ? fmt(v, v < 10 ? 1 : 0) : ''}</em><i style="height:${v / mmx * 90}px"></i><span>${k + 1}월</span></div>`).join('')}</div>`;
+  const fsum = D.facH.reduce((s, x) => s + x.h, 0) || 1, cmx = Math.max(1, ...D.cmp.map(c => c.r.strongH));
+  return `<section class="bsec">
+<h2><span>${num}</span>${esc(name)} <em class="pl ${j.k}">${j.t}</em></h2>
+<div class="kp"><div><b>${fmt(R.midH, 1)}h</b><span>연간 현휘 (중 이상) · 도달 ${fmt(R.hours, 1)}h</span></div><div><b>${R.nDaysMid}일</b><span>발생 일수 (중 이상)</span></div><div><b>${R.maxDailyMid}분</b><span>1일 최대 (${R.maxDayMid ? mdStr(y, R.maxDayMid) : '-'})</span></div><div><b>${fmt(R.maxI, 0)}</b><span>최대 반사 강도 W/㎡</span></div></div>
+<table><tr><th class="l" style="width:20%">건물 규모</th><td class="l">${D.info.floors}층 · 높이 ${fmt(D.info.h, 1)}m</td><th class="l" style="width:20%">검토 건물과 관계</th><td class="l">${D.dir ? D.dir + '쪽 약 ' + fmt(D.dist, 0) + 'm' : '-'}</td></tr>
+<tr><th class="l">발생 기간</th><td class="l">${mdStr(y, R.first)} ~ ${mdStr(y, R.last)}</td><th class="l">발생 시간대</th><td class="l num">${hhmm(R.minM)} – ${hhmm(R.maxM + RES.P.minStep)}</td></tr>
+<tr><th class="l">반사광 닿는 벽면</th><td class="l">${Object.keys(D.walls).length ? Object.entries(D.walls).sort((a, b) => b[1] - a[1]).map(e => e[0] + '측').join(', ') : '-'}</td><th class="l">영향 층 범위</th><td class="l">${D.floorRange ? D.floorRange[0] + '층 ~ ' + D.floorRange[1] + '층' : '-'}</td></tr>
+<tr><th class="l">강도별 시간</th><td class="l" colspan="3">강(≥${P.iHigh}) ${fmt(R.strongH, 1)}h · 중 이상(≥${P.iLow}) ${fmt(R.midH, 1)}h · 전체 ${fmt(R.hours, 1)}h</td></tr></table>
+<div class="figs">${plan ? `<div><img src="${plan}" alt="${esc(name)} 최대 영향 시점 배치도"><p class="cap">최대 강도 시점의 반사광 경로(주황 점선)와 도달 벽면</p></div>` : ''}
+<div><p class="cap" style="margin:0 0 4px">월별 현휘 시간 (시간)</p>${months}
+<table><tr><th class="l">원인 입면</th><th>연간 시간</th><th>비중</th></tr>${D.facH.map(x => `<tr><td class="l">${dirLabel(RES.fac[x.f].az)} 입면 (${fmt(RES.fac[x.f].az, 0)}°)</td><td class="num">${fmt(x.h, 1)}h</td><td class="num">${fmt(x.h / fsum * 100, 0)}%</td></tr>`).join('')}</table></div></div>
+<img src="${heat}" alt="${esc(name)} 연중 발생 분포"><p class="cap">${esc(name)} 연중 발생 분포 · 노랑 약, 주황 중, 빨강 강</p>
+<table><tr><th class="l">현휘가 긴 날</th><th>시작</th><th>종료</th><th>지속</th><th>최대 강도</th></tr>${D.topDays.map(d => `<tr><td class="l">${mdStr(y, d.d)}</td><td class="num">${hhmm(d.s)}</td><td class="num">${hhmm(d.e + RES.P.minStep)}</td><td class="num">${d.n * RES.P.minStep}분</td><td class="num">${fmt(d.I, 0)} W/㎡</td></tr>`).join('')}</table>
+<table><tr><th class="l">유리 (이 동 기준)</th><th>반사율</th><th>최대 강도</th><th class="l">'강' 등급 시간</th></tr>${D.cmp.map(c => `<tr${c.g.id === S.defGlass ? ' style="background:#fdf3e6"' : ''}><td class="l">${esc(c.g.name)}${c.g.id === S.defGlass ? ' (적용)' : ''}</td><td class="num">${c.g.R}%</td><td class="num">${fmt(c.r.maxI, 0)}</td><td class="l"><span class="bar"><i style="width:${Math.max(1, c.r.strongH / cmx * 200)}px"></i><span class="num">${fmt(c.r.strongH, 1)}h</span></span></td></tr>`).join('')}</table>
+<p class="cap" style="margin-top:8px"><b style="color:#1b232c">검토 의견</b></p><ul>${bldOpinion(i, D).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+</section>`;
+}
+function repScope() { const v = $('repScope') ? $('repScope').value : 'all'; return v === 'all' || v === 'sum' ? v : +v; }
+function renderRepScope() {
+  const el = $('repScope'); if (!el || !RES) return; const cur = el.value;
+  el.innerHTML = `<option value="all">전체 요약 + 동별 상세</option><option value="sum">전체 요약만</option>` + RES.names.map((n, i) => `<option value="${i}">${esc(n)} 단독 검토서</option>`).join('');
+  if ([...el.options].some(o => o.value === cur)) el.value = cur;
+}
+function buildReport(standalone) {
+  if (!RES) return '';
+  renderRepScope();
+  const scope = repScope();
+  const y = RES.P.year, P = RES.P2, recs = RES.ag.rec, names = RES.names, now = new Date();
+  const fg = facadeGeo(), fp = footprint();
+  const single = typeof scope === 'number';
+  const planImg = single ? null : (() => { const cv = document.createElement('canvas'); drawPlan({ cv, W: 900, H: 620, light: true }); return cv.toDataURL('image/png'); })();
+  const heatImg = single ? null : (() => { const cv = document.createElement('canvas'); drawHeat(cv, -1, LIGHT, [1100, 300]); return cv.toDataURL('image/png'); })();
+  const img3d = single ? null : standalone ? snapshot3D() : (R3.ok ? R3.renderer.domElement.toDataURL('image/jpeg', 0.85) : null);
+  const aff = recs.filter(r => r.hours > 0).length, over = recs.filter(r => judge(r).k === 'bad').length, w = worstIdx();
+  let dmax = 0; recs.forEach(r => { dmax = Math.max(dmax, r.maxDaily); });
+  const period = `${y}년 ${S.cfg.m0}월 ~ ${S.cfg.m1}월`;
+  const mx = Math.max(1, ...RES.cmp.map(c => c.strong));
+  const head = `<h1>${single ? esc(names[scope]) + ' 반사광 현휘 영향 검토서' : '건축물 반사광 현휘 영향 검토서'}</h1>
+<div class="meta"><span>프로젝트 ${esc($('projName').value)}</span>${S.rep.to ? `<span>제출처 ${esc(S.rep.to)}</span>` : ''}<span>작성 ${esc([S.rep.co, S.rep.by].filter(Boolean).join(' ') || '-')}</span><span>작성일 ${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}</span></div>`;
+  const overview = `<h2><span>1</span>검토 개요</h2>
+<table><tr><th class="l" style="width:22%">대지 위치</th><td class="l">${esc(S.site.addr)} (N ${fmt(S.site.lat, 4)}°, E ${fmt(S.site.lon, 4)}°)</td></tr>
+<tr><th class="l">분석 기간·간격</th><td class="l">${period}, ${S.cfg.dayStep == 1 ? '매일' : S.cfg.dayStep + '일 간격'} · ${S.cfg.minStep}분 간격, 한국표준시(KST)</td></tr>
+<tr><th class="l">태양 위치</th><td class="l">NOAA 천문 알고리즘(대기 굴절 보정), 맑은 날 직달일사 모델(Meinel)</td></tr>
+<tr><th class="l">판단 기준(참고)</th><td class="l">반사 일사 세기 ${S.cfg.iLow} W/㎡ 이상인 반사광이 1일 ${S.cfg.dailyLim}분 또는 연간 ${S.cfg.annualLim}시간 이상 도달 시 '기준 초과' (세기 = 맑은 날 직달일사 × 입사각별 유리 반사율), 최소 영향 면적 ${S.cfg.minArea}㎡</td></tr></table>
+<h2><span>2</span>건축물 및 유리 조건</h2>
+<table><tr><th>지상 층수</th><th>층고</th><th>높이</th><th>기준층 면적</th><th>연면적(계산)</th><th>진북 회전</th></tr>
+<tr class="num"><td>${S.bld.floors}층</td><td>${S.bld.fh} m</td><td>${fmt(bldH(), 1)} m</td><td>${fmt(Math.abs(polyArea(fp)), 1)} ㎡</td><td>${fmt(Math.abs(polyArea(fp)) * S.bld.floors, 0)} ㎡</td><td>${S.bld.rot}°</td></tr></table>
+<table><tr><th>입면(방위)</th><th>길이</th><th>유리 비율</th><th class="l">적용 유리</th><th>외부 반사율</th></tr>
+${fg.map(f => { const fc = S.fac[f.i], g = glassById(fc.glass); return `<tr><td>${dirLabel(f.az)} (${fmt(f.az, 0)}°)</td><td class="num">${fmt(f.L, 1)} m</td><td class="num">${fc.wwr}%</td><td class="l">${esc(g.name)}</td><td class="num">${g.R}%</td></tr>`; }).join('')}</table>`;
+  const limits = (n) => `<h2><span>${n}</span>분석 가정 및 한계</h2>
+<ul class="note"><li>모든 시간을 맑은 날로 가정한 최대 발생 조건입니다. 실제 발생 시간은 운량·미세먼지에 따라 줄어듭니다.</li>
+<li>유리 입면을 완전한 평면 거울로 보았습니다. 실제 복층유리의 미세한 휨(오일캔 현상)은 반사광을 퍼뜨려 도달 범위를 넓히고 강도를 낮춥니다.</li>
+<li>인접 건물의 벽면 전체를 수조면으로 보았으며, 창 위치·발코니·조경수·지형은 반영하지 않았습니다. 영향 층 범위는 발생 시점 표본에서 반사광이 닿은 높이로 산정했습니다.</li>
+<li>유리 비율은 반사광 도달 면적에 곱해 반영했으며, 반사 강도는 맑은 날 직달일사 × 입사각별 반사율로 산정한 상대 지표입니다.</li>
+<li>참고 기준은 독일 LAI 빛공해 지침의 반사광 눈부심 판단 관행(1일 30분·연 30시간)을 준용한 것으로, 국내 법정 기준이 아닙니다.</li></ul>`;
+  let body;
+  if (single) {
+    body = `<div class="rep">${head}${overview}${bldSection(scope, 3)}<h2><span>4</span>저감 방안</h2><ul>${mitigations().map(t => `<li>${esc(t)}</li>`).join('')}</ul>${limits(5)}</div>`;
+  } else {
+    const affIdx = recs.map((r, i) => i).filter(i => recs[i].hours > 0).sort((a, b) => recs[b].hours - recs[a].hours);
+    const none = recs.map((r, i) => i).filter(i => !recs[i].hours).map(i => names[i]);
+    const detail = scope === 'all' ? `<h2 class="pb"><span>8</span>동별 상세 분석</h2><p class="note">반사광이 닿는 ${affIdx.length}개동을 연간 현휘 시간이 긴 순서로 정리했습니다.${none.length ? ' 영향 없음: ' + esc(none.join(', ')) + '.' : ''}</p>` + affIdx.map((i, k) => bldSection(i, '8-' + (k + 1))).join('') : '';
+    const n0 = scope === 'all' ? 9 : 8;
+    body = `<div class="rep">${head}${overview}
+<h2><span>3</span>배치 및 모델</h2>
+<div class="figs"><div><img src="${planImg}" alt="배치도"><p class="cap">배치도 · ${mdStr(y, S.t.doy)} ${hhmm(S.t.min)} 반사광(주황), 점선 원은 최대 영향 거리 ${S.cfg.maxDist}m</p></div>
+${img3d ? `<div><img src="${img3d}" alt="3D 모델"><p class="cap">3D 모델 · 같은 시점의 반사광 도달 영역</p></div>` : ''}</div>
+<h2><span>4</span>분석 결과 요약</h2>
+<div class="kp"><div><b>${aff}/${names.length}</b><span>영향 받는 인접 건물</span></div><div><b class="${over ? 'bad' : 'ok'}">${over}</b><span>참고 기준 초과 건물</span></div><div><b>${fmt(w >= 0 ? recs[w].hours : 0, 1)}h</b><span>최대 연간 현휘 (${w >= 0 ? esc(names[w]) : '-'})</span></div><div><b>${dmax}분</b><span>최대 1일 지속</span></div></div>
+<ul>${noteLines().map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+<h2><span>5</span>인접 건물별 영향</h2>
+<table><tr><th class="l">건물</th><th>층수</th><th>도달 연간</th><th>중 이상 연간</th><th>중 이상 1일 최대</th><th>발생 기간</th><th>시간대</th><th>원인 입면</th><th>최대 강도</th><th>판정</th></tr>
+${recs.map((R, i) => { const j = judge(R), top = Object.entries(R.fac).sort((a, b) => b[1] - a[1])[0]; return `<tr><td class="l">${esc(names[i])}</td><td>${RES.nbInfo[i].floors}층</td><td class="num">${R.hours ? fmt(R.hours, 1) + 'h' : '-'}</td><td class="num">${R.midH ? fmt(R.midH, 1) + 'h' : '-'}</td><td class="num">${R.maxDailyMid ? R.maxDailyMid + '분' : '-'}</td><td>${R.first != null ? mdStr(y, R.first) + '~' + mdStr(y, R.last) : '-'}</td><td class="num">${R.maxM >= 0 ? hhmm(R.minM) + '–' + hhmm(R.maxM + RES.P.minStep) : '-'}</td><td>${top ? dirLabel(RES.fac[+top[0]].az) : '-'}</td><td class="num">${R.maxI ? fmt(R.maxI, 0) : '-'}</td><td class="${j.k}">${j.t}</td></tr>`; }).join('')}</table>
+<h2><span>6</span>연중 현휘 발생 분포</h2>
+<img src="${heatImg}" alt="연중 발생 분포"><p class="cap">가로: 월, 세로: 시각(KST). 노랑 약(&lt;${P.iLow}), 주황 중(${P.iLow}–${P.iHigh}), 빨강 강(≥${P.iHigh} W/㎡). 회색 곡선은 일출·일몰.</p>
+<h2><span>7</span>유리 반사율별 비교</h2>
+<table><tr><th class="l">유리</th><th>외부 반사율</th><th>최대 반사 강도</th><th>'중' 이상 시간</th><th class="l">'강' 등급 시간 (≥${P.iHigh} W/㎡)</th></tr>
+${RES.cmp.slice().sort((a, b) => a.g.R - b.g.R).map(c => `<tr${c.g.id === S.defGlass ? ' style="background:#fdf3e6"' : ''}><td class="l">${esc(c.g.name)}${c.g.id === S.defGlass ? ' (적용)' : ''}</td><td class="num">${c.g.R}%</td><td class="num">${fmt(c.maxI, 0)} W/㎡</td><td class="num">${fmt(c.mid, 1)}h</td><td class="l"><span class="bar"><i style="width:${Math.max(1, c.strong / mx * 220)}px"></i><span class="num">${fmt(c.strong, 1)}h</span></span></td></tr>`).join('')}</table>
+<p class="note">형상과 배치가 같으면 반사광이 닿는 시간은 유리 종류와 무관하게 같고, 반사 강도만 달라집니다. 시간 값은 전체 인접 건물 합계입니다.</p>
+${detail}
+<h2 class="${scope === 'all' ? 'pb' : ''}"><span>${n0}</span>저감 방안</h2>
+<ul>${mitigations().map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+${limits(n0 + 1)}
+</div>`;
+  }
+  if (!standalone) { $('repView').innerHTML = `<style>${REP_CSS}</style>` + body; return body; }
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc($('projName').value)} 현휘 검토서</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=IBM+Plex+Mono&display=swap"><style>body{margin:0;padding:32px 20px;background:#fff}${REP_CSS}@page{size:A4;margin:16mm}</style></head><body>${body}</body></html>`;
+}
+
+/* ===== 시작 ===== */
+function boot(reload) {
+  syncFac(); refreshInputs(); renderGlassTbl(); renderNbTbl(); renderSummaries(); renderBldStats();
+  rebuildViz();
+  if (!reload) { init3D(); }
+  build3D(); resetCam(); planFit();
+  setTime(S.t.doy, S.t.min);
+  $('resEmpty').hidden = false; $('resBody').hidden = true;
+  $('repView').innerHTML = '<p class="hint">분석을 실행하면 리포트 미리보기가 표시됩니다.</p>';
+  $('runStatus').className = ''; $('runStatus').textContent = '분석 준비';
+}
+function wireMisc() {
+  $('cityPreset').innerHTML = '<option value="">선택…</option>' + CITIES.map((c, i) => `<option value="${i}">${c[0]}</option>`).join('');
+  $('cityPreset').onchange = e => { const c = CITIES[+e.target.value]; if (!c) return; S.site.lat = c[1]; S.site.lon = c[2]; S.site.addr = c[0]; refreshInputs(); markStale(); geometryChanged(); renderSummaries(); save(); e.target.value = ''; };
+  document.querySelectorAll('[data-imode]').forEach(b => b.onclick = () => setIMode(b.dataset.imode));
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+  $('btnRun').onclick = runAnalysis;
+  $('btnFitGfa').onclick = () => {
+    const tgt = S.bld.gfa / S.bld.floors; const cur = Math.abs(polyArea(baseShape())); if (!(tgt > 0 && cur > 0)) return;
+    const k = Math.sqrt(tgt / cur);
+    if (S.bld.shape === 'rect') { S.bld.W = Math.round(S.bld.W * k * 10) / 10; S.bld.D = Math.round(S.bld.D * k * 10) / 10; }
+    else S.bld.polyText = parsePolyText(S.bld.polyText).map(p => (Math.round(p[0] * k * 100) / 100) + ', ' + (Math.round(p[1] * k * 100) / 100)).join('\n');
+    refreshInputs(); markStale(); geometryChanged(); save(); toast('기준층 면적을 ' + fmt(tgt, 1) + '㎡에 맞췄습니다.');
+  };
+  $('btnView3dReset').onclick = () => resetCam(false);
+  $('btnView3dTop').onclick = () => resetCam(true);
+  $('projName').onchange = () => { if (RES) buildReport(); };
+  new ResizeObserver(() => { if (!$('tplan').hidden) drawPlan(); }).observe($('planCanvas'));
+  new ResizeObserver(() => { if (RES && !$('tres').hidden) drawHeat($('heat'), HEAT_SEL, pal()); }).observe($('heat'));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { build3D(); drawPlan(); if (RES) drawHeat($('heat'), HEAT_SEL, pal()); });
+  new MutationObserver(() => { build3D(); drawPlan(); if (RES) drawHeat($('heat'), HEAT_SEL, pal()); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+bindAll(); wireMisc(); wireTables(); wireTime(); wirePlan(); wireDXF(); wireTracer(); wireVw(); wireSave(); wireResults();
+boot(false);
+setTimeout(runAnalysis, 60);
+
+</script>
+
+<script>
+/* ===== 입면 형식 (전면 커튼월 / 연창 / 펀치창) =====
+   유리 비율은 반사 면적 계산에 쓰이고(다시 계산 없이 바로 반영), 3D 화면은 형식대로 창을 그림.
+   정면 = 가장 긴 입면. 정면과 45° 이내로 평행한 면(정면·배면)과 나머지(옆면)에 비율을 따로 적용 */
+const STYLE_DEF = { cw: [90, 90], band: [55, 30], punch: [35, 20] };
+function frontFlags() {
+  const fg = facadeGeo(); let L = 0, nf = [0, 1];
+  fg.forEach(f => { if (f.L > L) { L = f.L; nf = f.n; } });
+  return fg.map(f => Math.abs(f.n[0] * nf[0] + f.n[1] * nf[1]) >= 0.707);
+}
+function renderStyleUI() {
+  const st = S.bld.style || 'cw';
+  $('bStyle').value = st;
+  $('bFrontLbl').textContent = st === 'cw' ? '유리 비율 %' : '정면·배면 유리 비율 %';
+  $('bSideWrap').hidden = st === 'cw';
+  $('bFrontW').value = S.bld.frontWwr ?? S.defWwr; $('bSideW').value = S.bld.sideWwr ?? S.defWwr;
+  $('bStyleHint').textContent = st === 'cw' ? '모든 입면에 같은 유리 비율을 씁니다.'
+    : `${st === 'band' ? '연창은 층마다 가로로 이어진 유리 띠' : '펀치창은 벽에 뚫린 창'}로 그립니다. 정면(가장 긴 면)과 배면, 옆면 비율을 따로 정할 수 있고, 아래 입면 표에서 면마다 고칠 수도 있습니다.`;
+}
+function applyStyle() {
+  S.bld.winRects = null;
+  const st = S.bld.style || 'cw', fw = +S.bld.frontWwr, sw = st === 'cw' ? fw : +S.bld.sideWwr;
+  syncFac();
+  const isF = frontFlags();
+  S.fac.forEach((f, i) => { f.wwr = isF[i] ? fw : sw; });
+  renderStyleUI(); renderFacTbl(); afterGlass();
+}
+// 메인 프로그램에서 받은 창 배치가 지금 형상과 맞는지 (형상·층·층고가 바뀌면 근사 배치로 그림)
+function winSig() { return JSON.stringify([S.bld.polyText, S.bld.shape, S.bld.floors, S.bld.fh, S.bld.rot]); }
+function drawWindows(A, B, f, H, glassCol, op, wallCol, fi) {
+  const wall = new THREE.Mesh(prismGeo([A, B], 0, H), new THREE.MeshLambertMaterial({ color: wallCol, side: THREE.DoubleSide }));
+  wall.geometry.setDrawRange(0, 6); R3.stat.add(wall);
+  const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy); if (L < 0.5) return;
+  const t = [dx / L, dy / L], n = [t[1], -t[0]], r = Math.max(0, Math.min(1, f.wwr / 100)); if (!r && !(S.bld.winRects && S.bld.winRects[fi] && S.bld.winRects[fi].length)) return;
+  const fh = +S.bld.fh, F = Math.round(H / fh), pos = [];
+  const P = (u, z) => T3(A[0] + t[0] * u + n[0] * 0.12, A[1] + t[1] * u + n[1] * 0.12, z);
+  const quad = (u0, u1, za, zb) => { const a = P(u0, za), b = P(u1, za), c = P(u1, zb), d = P(u0, zb); pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z); };
+  const exact = S.bld.winRects && S.bld.winSig === winSig() && S.bld.winRects[fi];
+  if (exact) exact.forEach(q => quad(q[0], q[1], q[2], q[3]));
+  else for (let k = 0; k < F; k++) {
+    const zb = k * fh;
+    if (S.bld.style === 'band') {
+      const hs = Math.max(0.3, Math.min(fh - 0.2, fh * r)), s0 = Math.max(0.1, Math.min(0.9, fh - hs - 0.2));
+      quad(0.3, L - 0.3, zb + s0, zb + s0 + hs);
+    } else {
+      const nb = Math.max(1, Math.round(L / (+S.bld.bay || 3))), bay = L / nb;
+      let wh = Math.min(1.8, fh - 1.2), wf = r / (wh / fh);
+      if (wf > 0.92) { wf = 0.92; wh = Math.min(fh - 0.4, r * fh / 0.92); }
+      const s0 = Math.max(0.2, Math.min(0.9, fh - wh - 0.3));
+      for (let j = 0; j < nb; j++) { const uc = (j + 0.5) * bay, w = bay * wf; quad(uc - w / 2, uc + w / 2, zb + s0, zb + s0 + wh); }
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  R3.stat.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: glassCol, transparent: true, opacity: Math.min(0.95, op + 0.2), side: THREE.DoubleSide })));
+}
+// 인접 건물이 바뀌면 이전 시각의 반사 결과(NOW)를 먼저 지움 → 화면을 다시 그릴 때 사라진 벽을 찾다 나던 오류 방지
+{ const _rebuildViz = rebuildViz; rebuildViz = function () { NOW = null; _rebuildViz(); }; }
+(() => {
+  if (!S.bld.style) { S.bld.style = 'cw'; S.bld.frontWwr = S.defWwr; S.bld.sideWwr = S.defWwr; }
+  $('bStyle').onchange = e => {
+    S.bld.style = e.target.value; const d = STYLE_DEF[S.bld.style];
+    S.bld.frontWwr = d[0]; S.bld.sideWwr = d[1];
+    applyStyle(); toast({ cw: '전면 커튼월', band: '연창(띠창)', punch: '펀치창' }[S.bld.style] + ' · 정면 ' + d[0] + '%' + (S.bld.style === 'cw' ? '' : ' · 옆면 ' + d[1] + '%') + '로 바꿨습니다.');
+  };
+  $('bFrontW').onchange = e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.bld.frontWwr = Math.max(0, Math.min(100, v)); applyStyle(); };
+  $('bSideW').onchange = e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.bld.sideWwr = Math.max(0, Math.min(100, v)); applyStyle(); };
+  renderStyleUI(); build3D();
+})();
+</script>
+<script>
+/* ===== 유리 색상 비교기(index.html) 연결 =====
+   같은 사이트의 메인 프로그램 안에서 열리면, 3D 탭의 현장·건물·유리·주변 건물을 받아 채우고 바로 분석함.
+   이 파일만 따로 열면 아무 일도 하지 않음 */
+(() => {
+  if (window.parent === window) return;
+  window.addEventListener('message', e => {
+    const d = e.data;
+    if (e.source !== window.parent || !d) return;
+    if (d.type === 'glare-glass') {
+      if (!S.glasses.some(x => x.id === d.id)) return;
+      S.defGlass = d.id; S.fac.forEach(f => { f.glass = d.id; });
+      renderGlassTbl(); afterGlass();
+      toast(glassById(d.id).name + ' ' + glassById(d.id).R + '%로 바꿔 다시 집계했습니다.');
+      return;
+    }
+    if (d.type !== 'glare-import') return;
+    try {
+      S.site.addr = d.addr || S.site.addr;
+      S.site.lat = Math.round(d.lat * 1e6) / 1e6; S.site.lon = Math.round(d.lon * 1e6) / 1e6;
+      Object.assign(S.bld, { shape: 'poly', polyText: d.poly.map(p => p[0] + ', ' + p[1]).join('\n'), rot: 0, ox: 0, oy: 0, floors: d.floors, fh: d.fh, gfa: 0, glassZ0: d.glassZ0 || 0 });
+      S.glasses = d.glasses.concat(S.glasses.filter(g => !/^kcc/.test(g.id)));
+      S.defGlass = d.defGlass; S.defWwr = d.wwr; S.fac = d.fac && d.fac.length === d.poly.length ? d.fac.map(f => ({ wwr: f.wwr, glass: f.glass })) : [];
+      if (d.vwKey) S.vw.key = d.vwKey;
+      if (d.vwDomain) S.vw.domain = d.vwDomain;
+      S.vw.fh = 3.4;
+      if (d.proj) $('projName').value = d.proj;
+      // 이전 인접 건물의 반사 결과가 남아 화면을 다시 그릴 때 오류가 나지 않도록 먼저 비움
+      S.nb = d.nb ? d.nb.map((n, i) => ({ id: 'x' + i, name: n.name, poly: n.poly, floors: n.floors, h: n.h, src: 'vworld' })) : [];
+      if (d.style) { S.bld.style = d.style; S.bld.frontWwr = d.frontWwr; S.bld.sideWwr = d.sideWwr; }
+      S.bld.bay = d.bay || 3; S.bld.winRects = d.winRects || null; S.bld.winSig = winSig();
+      RES = null; STALE = true; syncFac(); boot(true);
+      if (d.features && d.features.length) { S.vw.radius = 99999; importFeatures(d.features); }
+      S.vw.radius = d.radius || 300; refreshInputs();
+      save(); renderSummaries(); if (window.renderStyleUI) renderStyleUI();
+      const run = () => RUNNING ? setTimeout(run, 200) : runAnalysis();
+      setTimeout(run, 100);
+      window.parent.postMessage({ type: 'glare-msg', text: `분석기에 넘겼습니다: ${d.proj} · ${d.floors}층 · 주변 ${S.nb.length}동 · 기본 유리 ${glassById(S.defGlass).name} ${glassById(S.defGlass).R}% · 분석을 실행합니다.` }, '*');
+    } catch (err) {
+      toast('가져오기 중 오류가 났습니다: ' + err.message);
+      window.parent.postMessage({ type: 'glare-msg', text: '가져오기 중 오류: ' + err.message }, '*');
+    }
+  });
+  window.parent.postMessage({ type: 'glare-ready' }, '*');
+})();
+</script>
+</body></html>
