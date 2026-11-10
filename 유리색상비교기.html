@@ -1,0 +1,1293 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>유리 색상 비교기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 넓은 시공사진 스테이지(좌) + 유리 사양 패널(우), 좁은 화면에선 세로로 쌓임 */
+:root {
+  --bg: #e9eef0;
+  --surface: #ffffff;
+  --surface-2: #f3f6f7;
+  --ink: #15202a;
+  --muted: #5a6975;
+  --line: #d3dbdf;
+  --accent: #1d6a73;
+  --accent-ink: #ffffff;
+  --stage: #1a2228;
+  --stage-ink: #e8eef1;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1418; --surface: #161f25; --surface-2: #1c262d; --ink: #e3eaee; --muted: #93a3ae;
+    --line: #2a3740; --accent: #4fb0b8; --accent-ink: #08201f; --stage: #0a0f12; --stage-ink: #e8eef1;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1418; --surface: #161f25; --surface-2: #1c262d; --ink: #e3eaee; --muted: #93a3ae;
+  --line: #2a3740; --accent: #4fb0b8; --accent-ink: #08201f; --stage: #0a0f12; --stage-ink: #e8eef1;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 32px;
+}
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 1480px; margin: 0 auto 14px; }
+h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h1 span { color: var(--muted); font-weight: 500; font-size: 14px; margin-left: 8px; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; max-width: 1480px; margin: 0 auto; align-items: start; }
+@media (max-width: 900px) { .app { grid-template-columns: minmax(0, 1fr); } }
+
+.stage-col { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px; gap: 2px; }
+.seg button { white-space: nowrap; border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 500; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 500; padding: 7px 12px; border-radius: var(--radius); cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.small { padding: 5px 10px; font-size: 12px; }
+.btn:disabled { opacity: .45; cursor: default; }
+button:focus-visible, input:focus-visible, label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.spacer { flex: 1; }
+
+.stage { background: var(--stage); border-radius: var(--radius); display: flex; justify-content: center; align-items: center; padding: 10px; min-height: 260px; }
+.wrap { position: relative; line-height: 0; user-select: none; -webkit-user-select: none; max-width: 100%; }
+canvas#view { display: block; touch-action: none; max-width: 100%; border-radius: 3px; }
+.mode-compare canvas#view { cursor: ew-resize; }
+.mode-poly canvas#view, .mode-wand canvas#view, .mode-rect canvas#view { cursor: crosshair; }
+.split { position: absolute; top: 0; bottom: 0; width: 0; pointer-events: none; }
+.split::before { content: ""; position: absolute; top: 0; bottom: 0; left: -1px; width: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
+.knob { position: absolute; top: 50%; left: 0; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #1a2228; border: 0; display: grid; place-items: center; pointer-events: auto; cursor: ew-resize; box-shadow: 0 2px 10px rgba(0,0,0,.35); touch-action: none; }
+.knob svg { width: 22px; height: 22px; }
+.chip { position: absolute; top: 10px; line-height: 1.3; font-size: 12px; font-weight: 600; color: #fff; background: rgba(12,18,22,.62); padding: 5px 9px; border-radius: 5px; pointer-events: none; display: flex; gap: 6px; align-items: center; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip i { width: 10px; height: 10px; border-radius: 2px; flex: none; border: 1px solid rgba(255,255,255,.6); }
+.chip.a { left: 10px; } .chip.b { right: 10px; }
+.hint { color: var(--muted); font-size: 13px; min-height: 20px; }
+.hint b { color: var(--ink); font-weight: 600; }
+.edit-only { display: none; }
+.editing .edit-only { display: inline-flex; }
+.editing .split, .editing .chip { display: none; }
+
+.panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.card h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+.tag { font-family: var(--font-mono); font-size: 12px; font-weight: 500; background: var(--ink); color: var(--bg); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.swatches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.namebox select { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; width: 100%; }
+.prodinfo { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: stretch; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.pcolor { border-radius: 4px; border: 1px solid var(--line); min-height: 56px; }
+.prodinfo dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; }
+.prodinfo dt { font-size: 11px; color: var(--muted); letter-spacing: .03em; }
+.prodinfo dd { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sw { border: 1px solid var(--line); background: var(--surface-2); border-radius: 6px; padding: 4px 4px 5px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; align-items: stretch; font: inherit; color: var(--muted); font-size: 11px; line-height: 1.2; text-align: center; }
+.sw span.c { height: 26px; border-radius: 4px; display: block; }
+.sw[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); box-shadow: 0 0 0 1px var(--accent); }
+.field { display: grid; grid-template-columns: 64px minmax(0,1fr) 44px; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.field output { font-family: var(--font-mono); font-size: 12px; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.namebox { display: grid; grid-template-columns: 64px minmax(0,1fr) 44px; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.namebox input[type="text"] { font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+.namebox { grid-template-columns: 64px minmax(0,1fr); }
+.cin { display: flex; flex-direction: column; gap: 8px; }
+.cin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.cloudseg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cloudseg button { padding: 6px 4px; font-size: 13px; }
+.seg.small button { padding: 3px 10px; font-size: 12px; }
+.cin-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cin-row input[type="color"] { width: 36px; height: 32px; border: 1px solid var(--line); border-radius: 6px; padding: 2px; background: var(--surface-2); cursor: pointer; flex: none; }
+.cin-row input.code, .cin-row input[type="number"] { font-family: var(--font-mono); font-size: 13px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px; min-width: 0; font-variant-numeric: tabular-nums; }
+.cin-row input.code { width: 92px; text-transform: uppercase; }
+.cin-row input.code.wide { flex: 1; width: auto; }
+.cin-row[hidden] { display: none; }
+.rgbnums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; flex: 1 1 100%; }
+.cin-row input[type="number"] { width: 100%; padding-right: 2px; }
+.cin-row input.code:not(.wide) { flex: 1; }
+.cin-row input.bad { border-color: #c2410c; }
+.ch { display: flex; min-width: 0; align-items: center; gap: 3px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.mswatch { width: 36px; height: 32px; border-radius: 6px; border: 1px solid var(--line); flex: none; }
+.conv { margin: 0; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+.conv b { color: var(--ink); font-weight: 500; }
+.conv.warn { color: #b45309; }
+.load-msg { color: #b45309; font-weight: 600; }
+.load-msg.ok { color: var(--accent); }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+label.btn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+label.btn { position: relative; display: inline-block; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header>
+  <h1>유리 색상 비교기<span>시공사진 위에 두 가지 유리를 적용해 좌우로 비교</span></h1>
+</header>
+
+<div class="app">
+  <section class="stage-col" id="stageCol">
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="작업 모드">
+        <button id="mCompare" aria-pressed="true">비교</button>
+        <button id="mRect" aria-pressed="false">사각형</button>
+        <button id="mPoly" aria-pressed="false">다각형</button>
+        <button id="mWand" aria-pressed="false">클릭 선택</button>
+      </div>
+      <button class="btn primary" id="autoBtn">유리 자동 인식</button>
+      <div class="seg edit-only" role="group" aria-label="영역 추가 또는 빼기">
+        <button id="opAdd" aria-pressed="true">추가</button>
+        <button id="opSub" aria-pressed="false">빼기</button>
+      </div>
+      <span class="spacer"></span>
+      <button class="btn" id="undoBtn" disabled>되돌리기</button>
+    </div>
+
+    <div class="stage">
+      <div class="wrap" id="wrap">
+        <canvas id="view"></canvas>
+        <div class="chip a" id="chipA"><i></i><span></span></div>
+        <div class="chip b" id="chipB"><i></i><span></span></div>
+        <div class="split" id="split">
+          <button class="knob" id="knob" aria-label="비교선 위치 (좌우 화살표로 이동)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="hint" id="hint"></div>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <h2>시공사진</h2>
+      <div class="row">
+        <button class="btn primary" id="fileBtn" type="button">사진 불러오기</button>
+        <input type="file" id="file" accept="image/*,.jpg,.jpeg,.png,.webp,.bmp,.gif" hidden>
+        <button class="btn" id="sampleBtn">예시 사진</button>
+      </div>
+      <p class="note load-msg" id="loadMsg" hidden></p>
+      <p class="note">JPG·PNG·WEBP 사진을 쓸 수 있습니다. 사진을 이 창에 끌어다 놓거나 붙여넣기(Ctrl+V)해도 됩니다. 새 사진을 불러오면 유리 부분을 자동으로 찾아 색을 입힙니다.</p>
+    </div>
+
+    <div class="card">
+      <h2>유리 영역</h2>
+      <div class="field"><span>인식 민감도</span><input type="range" id="sens" min="0" max="100" value="50"><output id="sensOut">50</output></div>
+      <p class="note" id="autoNote">유리 자동 인식은 색상(청색·녹색·회색 계열)과 판유리의 사각 형태를 기준으로 찾습니다. 벽이 잡히면 민감도를 낮추고, 유리가 빠지면 높이세요.</p>
+      <div class="field"><span>클릭 선택 허용치</span><input type="range" id="tol" min="2" max="80" value="18"><output id="tolOut">18</output></div>
+      <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="edgeStop" checked> 클릭 선택이 창틀 경계선에서 멈춤</label>
+      <div class="row">
+        <button class="btn" id="maskToggle" aria-pressed="true">영역 표시 켜짐</button>
+        <button class="btn" id="clearMask">영역 전체 지우기</button>
+      </div>
+      <p class="note" id="clearConfirm" hidden>영역을 모두 지울까요? <button class="btn" id="clearYes">지우기</button> <button class="btn" id="clearNo">취소</button></p>
+    </div>
+
+    <div class="card">
+      <h2>반사 구름</h2>
+      <div class="seg cloudseg" role="group" aria-label="구름 이미지 종류">
+        <button id="csSky1" aria-pressed="true">뭉게구름</button>
+        <button id="csSky2" aria-pressed="false">새털구름</button>
+        <button id="csGen" aria-pressed="false">자동 생성</button>
+        <button id="csPhoto" aria-pressed="false">내 사진</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="skyBtn" type="button">하늘 사진 불러오기</button>
+        <input type="file" id="skyFile" accept="image/*,.jpg,.jpeg,.png,.webp" hidden>
+        <span class="note" id="skyName">불러온 사진 없음</span>
+      </div>
+      <div class="field"><span>실란트 폭</span><input type="range" id="sealant" min="0" max="12" step="0.5" value="3"><output id="sealantO">3</output></div>
+      <p class="note">유리 가장자리에서 이 폭만큼은 구름이 비치지 않습니다(실란트·코킹 부분). 0이면 끝까지 비칩니다.</p>
+      <p class="note">뭉게구름·새털구름은 실제 하늘 사진입니다. 가지고 있는 하늘 사진을 불러오면 그 사진이 유리에 비칩니다. 구름 크기·배치와 반사 정도는 유리 A, B에서 각각 조절합니다.</p>
+    </div>
+
+    <div class="card" id="cardA"></div>
+    <div class="card" id="cardB"></div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  // KCC GLASS 2025 COLOR INDEX (색상은 카탈로그 색상 샘플에서 추출)
+  const CATALOG = [
+    ['REFLECTIVE GLASS', 'C LOOKS', 'STN134', 'H/S', 'VI0012', '3.0PB 3.5/3.9', '#475b70'],
+    ['REFLECTIVE GLASS', 'C LOOKS', 'UHD137', 'H/S', 'CC0013', '3.6BG 5.2/0.5', '#7a807e'],
+    ['SINGLE LOW-E', 'EGIS GRAY', 'EHD144', 'H/S', 'VC0020', '1.2PB 5.9/0.5', '#8f9295'],
+    ['SINGLE LOW-E', 'EGIS SILVER', 'EHD148', 'H/S', 'VF0032', '1.7PB 9.0/2.1', '#d6e6ed'],
+    ['SINGLE LOW-E', 'EGIS BLUE', 'EHD156', 'H/S', 'VQ0200', '6.1PB 3.8/10.3', '#1f6099'],
+    ['SINGLE LOW-E', 'EGIS CLEAR', 'EHD176', 'H/S', 'BA0105', '5.5B 8.4/1.5', '#c7d9db'],
+    ['SINGLE LOW-E', 'CRYSTAL GRAY', 'ECT149', 'H/S', 'BC0019', '4.6B 6.1/1.0', '#8f9a9c'],
+    ['SINGLE LOW-E', 'CRYSTAL SILVER', 'ECT160', 'H/S', 'NA0815', '0.7Y 9.4/0.2', '#f0efeb'],
+    ['SINGLE LOW-E', 'CRYSTAL BLUE', 'ECT168', 'H/S', 'VL0142', '5.5PB 6.1/6.8', '#7498c1'],
+    ['SINGLE LOW-E', 'CRYSTAL CLEAR', 'ECT173 / ECI173', 'H/S', 'PF0015', '6.3P 9.0/2.0', '#e8e4ea'],
+    ['SINGLE LOW-E', 'CRYSTAL CLEAR', 'EVT186', 'H/S', 'CA0025', '7.1G 9.3/0.3', '#e9edec'],
+    ['SINGLE LOW-E', 'CRYSTAL BRONZE', 'ECT157', 'H/S', 'HK0437', '7.8YR 7.9/7.1', '#f0b177'],
+    ['DOUBLE LOW-E', 'PLATINUM GRAY', 'MCT150', 'H/S', 'VH0011', '3.0PB 5.5/3.6', '#70899a'],
+    ['DOUBLE LOW-E', 'PLATINUM EURO GRAY', 'MCT148', 'H/S', 'VC0024', '5.3PB 4.7/1.1', '#6d717b'],
+    ['DOUBLE LOW-E', 'PLATINUM SILVER', 'MCT145 / MCT138', 'H/S', 'BA0013', '8.2B 9.3/0.4', '#ebeeed'],
+    ['DOUBLE LOW-E', 'PLATINUM BLUE', 'MCT154', 'H/S', 'VF0034', '3.7PB 8.5/3.4', '#c3d8ea'],
+    ['DOUBLE LOW-E', 'PLATINUM SKY BLUE', 'MCT156', 'H/S', 'VM0398', '3.2PB 3.6/8.0', '#2a5c88'],
+    ['DOUBLE LOW-E', 'PLATINUM GREEN', 'MCT155', 'H/S', 'GH0006', '10.0G 5.3/3.7', '#598878'],
+    ['DOUBLE LOW-E', 'PLATINUM CLEAR', 'MVT175 / MVT172', 'H/S', 'BB0125', '7.2B 8/1', '#c1cccd'],
+    ['DOUBLE LOW-E', 'CULLINAN GRAY', 'MZT135', 'H/S', 'BC0020', '7.5B 5.4/1.1', '#838b8e'],
+    ['DOUBLE LOW-E', 'CULLINAN SILVER', 'MZT128', 'H/S', 'VA0016', '6.0PB 8.7/1.4', '#e7e8ec'],
+    ['DOUBLE LOW-E', 'CULLINAN BLUE', 'MZT152', 'H/S', 'VK0085', '5.2PB 7.1/6.7', '#8cb4d9'],
+    ['DOUBLE LOW-E', 'VILAZ GRAY', 'MCR151 / MCT151', 'H/S', 'BB0321', '9.4B 7.8/0.7', '#bfc3c5'],
+    ['DOUBLE LOW-E', 'VILAZ CLEAR', 'MVR170', 'A/N', 'VF0036', '1.7PB 8.5/3.3', '#bedae8'],
+    ['DOUBLE LOW-E', 'VILAZ GREEN', 'MCR158', 'A/N', 'GB0074', '4.6G 8.0/1.3', '#bbccc1'],
+  ];
+  // 카탈로그에 투과율·반사율이 없어 색 농도·반사는 분류와 색 밝기로 정한 초깃값(사용자가 조정)
+  const PRESETS = CATALOG.map(([cat, series, code, hs, kcc, munsell, color]) => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(color.substr(i, 2), 16));
+    const V = Math.max(r, g, b) / 255;
+    const base = cat === 'REFLECTIVE GLASS' ? 32 : cat === 'SINGLE LOW-E' ? 20 : 14;
+    return {
+      cat, series, code, hs, kcc, munsell, color,
+      name: `${series} ${code}`,
+      tint: Math.round(38 + (1 - V) * 45),
+      refl: Math.min(60, base + (V > 0.85 ? 12 : 0)),
+    };
+  });
+  const CAT_KO = { 'REFLECTIVE GLASS': '반사유리', 'SINGLE LOW-E': '싱글 로이', 'DOUBLE LOW-E': '더블 로이' };
+  const glass = {
+    A: { ...PRESETS[17], preset: 17, cloud: 50, csize: 55, cseed: 3 },  // PLATINUM GREEN MCT155
+    B: { ...PRESETS[12], preset: 12, cloud: 50, csize: 55, cseed: 3 },  // PLATINUM GRAY MCT150
+  };
+
+  const $ = id => document.getElementById(id);
+  const view = $('view'), vctx = view.getContext('2d');
+  const wrap = $('wrap'), stageCol = $('stageCol');
+  const mk = () => document.createElement('canvas');
+  const origC = mk(), maskC = mk(), overC = mk(), outA = mk(), outB = mk();
+  const octx = origC.getContext('2d', { willReadFrequently: true });
+  const mctx = maskC.getContext('2d', { willReadFrequently: true });
+  let W = 0, H = 0, origData = null, maskA = null;
+  let mode = 'compare', op = 'add', split = 0.5, showMask = true;
+  let poly = [], hover = null, dragging = false;
+  const undo = [];
+  const dirty = { A: true, B: true };
+
+  /* ---------- image setup ---------- */
+  function setSource(src, presetMask) {
+    let w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
+    const s = Math.min(1, 1800 / Math.max(w, h));
+    W = Math.round(w * s); H = Math.round(h * s);
+    for (const c of [origC, maskC, overC, outA, outB, view]) { c.width = W; c.height = H; }
+    octx.drawImage(src, 0, 0, W, H);
+    origData = octx.getImageData(0, 0, W, H);
+    computeGrad();
+    mctx.clearRect(0, 0, W, H);
+    if (presetMask) presetMask(mctx);
+    undo.length = 0; updUndo();
+    poly = []; split = 0.5;
+    maskChanged();
+    fit();
+  }
+
+  function fit() {
+    if (!W) return;
+    const avail = wrap.parentElement.clientWidth - 20;
+    const maxH = Math.max(260, window.innerHeight * 0.72);
+    const sc = Math.min(avail / W, maxH / H);
+    view.style.width = Math.round(W * sc) + 'px';
+    view.style.height = Math.round(H * sc) + 'px';
+    placeSplit();
+  }
+  window.addEventListener('resize', fit);
+
+  function maskChanged() {
+    const md = mctx.getImageData(0, 0, W, H).data;
+    maskA = new Uint8Array(W * H);
+    for (let i = 0, j = 3; i < maskA.length; i++, j += 4) maskA[i] = md[j];
+    const oc = overC.getContext('2d');
+    oc.globalCompositeOperation = 'source-over';
+    oc.clearRect(0, 0, W, H);
+    oc.fillStyle = '#ff3d7f';
+    oc.fillRect(0, 0, W, H);
+    oc.globalCompositeOperation = 'destination-in';
+    oc.drawImage(maskC, 0, 0);
+    computeEdgeDist();
+    dirty.A = dirty.B = true;
+    schedule();
+  }
+
+  /* ---------- 유리 가장자리까지의 거리 (실란트 자리) ---------- */
+  let distA = null;
+  function computeEdgeDist() {
+    // 챔퍼 거리변환(3-4): 유리 안쪽 픽셀이 영역 경계에서 몇 px 떨어져 있는지
+    const N = W * H, INF = 60000, d = new Uint16Array(N);
+    for (let p = 0; p < N; p++) d[p] = maskA[p] >= 128 ? INF : 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = y * W + x; let v = d[p]; if (!v) continue;
+      if (x > 0) v = Math.min(v, d[p - 1] + 3);
+      if (y > 0) { v = Math.min(v, d[p - W] + 3); if (x > 0) v = Math.min(v, d[p - W - 1] + 4); if (x < W - 1) v = Math.min(v, d[p - W + 1] + 4); }
+      d[p] = v;
+    }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+      const p = y * W + x; let v = d[p]; if (!v) continue;
+      if (x < W - 1) v = Math.min(v, d[p + 1] + 3);
+      if (y < H - 1) { v = Math.min(v, d[p + W] + 3); if (x < W - 1) v = Math.min(v, d[p + W + 1] + 4); if (x > 0) v = Math.min(v, d[p + W - 1] + 4); }
+      d[p] = v;
+    }
+    distA = d;
+  }
+
+  /* ---------- glass rendering ---------- */
+  function hex(h) { return [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)); }
+  /* ---------- 뭉게구름 반사 이미지 ---------- */
+  const cloudCache = new Map();
+  let skyPhoto = null, cloudSrc = 'sky1';
+  // 2D 그라디언트 노이즈 + fBm
+  function makeNoise(seed) {
+    const perm = new Uint8Array(512), gx = new Float32Array(256), gy = new Float32Array(256);
+    let sd = seed * 7919 + 13; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    const p = [...Array(256).keys()];
+    for (let i = 255; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+    for (let i = 0; i < 256; i++) { const a = rnd() * Math.PI * 2; gx[i] = Math.cos(a); gy[i] = Math.sin(a); }
+    const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+    const n2 = (x, y) => {
+      const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+      const X = xi & 255, Y = yi & 255;
+      const g = (h, dx, dy) => gx[h] * dx + gy[h] * dy;
+      const aa = perm[X + perm[Y]], ab = perm[X + perm[Y + 1]], ba = perm[X + 1 + perm[Y]], bb = perm[X + 1 + perm[Y + 1]];
+      const u = fade(xf), v = fade(yf);
+      const x1 = g(aa, xf, yf) + u * (g(ba, xf - 1, yf) - g(aa, xf, yf));
+      const x2 = g(ab, xf, yf - 1) + u * (g(bb, xf - 1, yf - 1) - g(ab, xf, yf - 1));
+      return x1 + v * (x2 - x1); // 약 -0.7 ~ 0.7
+    };
+    // fBm: 여러 크기의 결을 겹쳐 자연스러운 구름 밀도
+    return (x, y) => {
+      let s = 0, amp = 0.5, f = 1;
+      for (let o = 0; o < 6; o++) { s += amp * n2(x * f, y * f); f *= 2.03; amp *= 0.5; }
+      return 0.5 + s * 1.15; // 대략 0 ~ 1
+    };
+  }
+  // 자동 생성: 경계가 부드럽게 퍼지는 자연스러운 구름 (fBm + 도메인 워핑)
+  function genClouds(size, seed) {
+    const sw = Math.min(640, W), sh = Math.max(2, Math.round(H * sw / W));
+    const noise = makeNoise(seed), warp = makeNoise(seed + 101);
+    const scale = Math.max(sw, sh) * (0.12 + size / 100 * 0.55), fs = 1 / scale;
+    const ang = -0.5 + (seed % 7) * 0.12, ca = Math.cos(ang), sa = Math.sin(ang);
+    const c = mk(); c.width = sw; c.height = sh;
+    const cx = c.getContext('2d'), img = cx.createImageData(sw, sh), d = img.data;
+    const dens = new Float32Array(sw * sh);
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+      // 바람 방향으로 늘어난 좌표 + 워핑으로 흐르는 결
+      let u = (x * ca - y * sa) * fs, v = (x * sa + y * ca) * fs * 1.7;
+      const wx = warp(u * 0.7 + 5.2, v * 0.7) - 0.5, wy = warp(u * 0.7, v * 0.7 + 9.1) - 0.5;
+      u += wx * 1.6; v += wy * 1.6;
+      dens[y * sw + x] = noise(u, v);
+    }
+    const sm = (e0, e1, t) => { t = Math.min(1, Math.max(0, (t - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+    const off = Math.max(2, Math.round(scale * 0.04));
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+      const p = y * sw + x, dv = dens[p];
+      const al = sm(0.5, 0.78, dv) * 0.95;
+      if (al <= 0) continue;
+      const qy = Math.max(0, y - off), toward = dens[qy * sw + x];
+      let lit = 0.95 + (dv - toward) * 0.8 - (1 - al) * 0.05; // 아주 옅은 명암만
+      lit = Math.min(1, Math.max(0.78, lit));
+      const i = p * 4;
+      d[i] = 246 * lit; d[i + 1] = 249 * lit; d[i + 2] = 255 * lit;
+      d[i + 3] = Math.round(al * 255);
+    }
+    cx.putImageData(img, 0, 0);
+    // 살짝 흐리게 해서 실제 사진처럼 부드럽게
+    const o = mk(); o.width = sw; o.height = sh;
+    const ox = o.getContext('2d'); ox.filter = `blur(${Math.max(1, sw / 400).toFixed(1)}px)`; ox.drawImage(c, 0, 0);
+    return o;
+  }
+  function photoClouds(src, size, seed) {
+    // 하늘 사진: 구름 크기 → 확대 배율, 배치 바꾸기 → 위치·좌우 반전
+    const c = mk(); c.width = W; c.height = H;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    const zoom = 1 + size / 100 * 1.5; // 클수록 사진을 확대 → 구름이 커짐
+    const s = Math.max(W / src.width, H / src.height) * zoom;
+    const dw = src.width * s, dh = src.height * s;
+    let sd = seed * 31 + 5; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    const fx = seed !== 3 && rnd() < 0.5;
+    const ox = -(dw - W) * (seed === 3 ? 0.5 : rnd()), oy = -(dh - H) * (seed === 3 ? 0.5 : rnd());
+    x.save();
+    if (fx) { x.translate(W, 0); x.scale(-1, 1); }
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(src, ox, oy, dw, dh);
+    x.restore();
+    const im = x.getImageData(0, 0, W, H), d = im.data;
+    // 사진마다 하늘의 채도가 달라서 기준을 사진에서 직접 잡음
+    const hist = new Uint32Array(101);
+    for (let i = 0; i < d.length; i += 16) {
+      const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+      hist[Math.round((mx ? (mx - mn) / mx : 0) * 100)]++;
+    }
+    let tot = 0, acc = 0, skyS = 0.3;
+    for (const h of hist) tot += h;
+    for (let k = 0; k <= 100; k++) { acc += hist[k]; if (acc >= tot * 0.9) { skyS = Math.max(0.08, k / 100); break; } }
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      const sat = mx ? (mx - mn) / mx : 0;
+      let cloudy = Math.min(1, Math.max(0, 1 - sat / skyS));
+      cloudy = cloudy ** 0.8 * Math.min(1, mx / 200);
+      d[i + 3] = Math.round((0.18 + 0.82 * cloudy) * 255); // 푸른 하늘도 옅게 비침
+    }
+    x.putImageData(im, 0, 0);
+    return c;
+  }
+  const SKY_SRC = {
+    sky1: 'data:image/jpeg;base64,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',
+    sky2: 'data:image/jpeg;base64,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',
+  };
+  const skyImgs = {};
+  for (const [k, u] of Object.entries(SKY_SRC)) {
+    const im = new Image();
+    im.onload = () => { skyImgs[k] = im; cloudCache.clear(); dirty.A = dirty.B = true; schedule(); };
+    im.src = u;
+  }
+  function cloudLayer(size, seed) {
+    const key = `${cloudSrc}_${W}x${H}_${size}_${seed}`;
+    if (cloudCache.has(key)) return cloudCache.get(key);
+    if (cloudCache.size > 6) cloudCache.clear();
+    const ph = cloudSrc === 'photo' ? skyPhoto : skyImgs[cloudSrc];
+    const src = cloudSrc === 'gen' ? genClouds(size, seed) : ph ? photoClouds(ph, size, seed) : genClouds(size, seed);
+    const c = mk(); c.width = W; c.height = H;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+    x.drawImage(src, 0, 0, W, H);
+    const data = x.getImageData(0, 0, W, H).data;
+    cloudCache.set(key, data);
+    return data;
+  }
+
+  function renderGlass(g, out) {
+    const [cr, cg, cb] = hex(g.color);
+    const s = g.tint / 100, rf = g.refl / 100;
+    const mr = 1 - s + s * cr / 255, mg = 1 - s + s * cg / 255, mb = 1 - s + s * cb / 255;
+    const rr = cr * 0.45 + 255 * 0.55, rgc = cg * 0.45 + 255 * 0.55, rb = cb * 0.45 + 255 * 0.55;
+    const src = origData.data;
+    const ca = (g.cloud || 0) / 100, cl = ca > 0 ? cloudLayer(g.csize, g.cseed) : null;
+    // 반사가 강할수록 유리색에 덜 묻히고 하얀 구름이 또렷하게
+    const tk = 1 - ca * 0.55;
+    const cmr = 1 - (0.45 - 0.45 * mr) * tk, cmg = 1 - (0.45 - 0.45 * mg) * tk, cmb = 1 - (0.45 - 0.45 * mb) * tk;
+    const solid = Math.max(0, ca - 0.45) * 1.6;
+    const sb = +$('sealant').value * W / 1000; // 화면 폭 1000px 기준 → 사진 해상도에 맞게
+    const ctx = out.getContext('2d');
+    const img = ctx.createImageData(W, H), d = img.data;
+    for (let p = 0, i = 0; p < maskA.length; p++, i += 4) {
+      const r = src[i], gg = src[i + 1], b = src[i + 2];
+      d[i + 3] = 255;
+      const m = maskA[p];
+      if (m === 0) { d[i] = r; d[i + 1] = gg; d[i + 2] = b; continue; }
+      const k = m / 255;
+      const lum = (0.299 * r + 0.587 * gg + 0.114 * b) / 255;
+      const lf = rf * (0.45 + 0.55 * lum);
+      const r2 = r * mr * (1 - rf) + rr * lf;
+      const g2 = gg * mg * (1 - rf) + rgc * lf;
+      const b2 = b * mb * (1 - rf) + rb * lf;
+      let r3 = r2, g3 = g2, b3 = b2;
+      if (cl) {
+        // 하늘(옛은 부분)과 구름(흰 부분)을 나눠, 값이 클수록 구름만 또렷하게
+        const a0 = cl[i + 3] / 255, cloudy = Math.max(0, (a0 - 0.18) / 0.82);
+        const e1 = 0.85 - 0.3 * ca, t0 = Math.min(1, Math.max(0, (cloudy - 0.12) / (e1 - 0.12)));
+        const c2 = t0 * t0 * (3 - 2 * t0) * 0.6 + cloudy * 0.4;
+        const aSky = Math.min(a0, 0.18) * ca * 0.8;
+        // 실란트(유리 가장자리 띠)에는 구름이 비치지 않음
+        const ew = sb > 0 ? Math.min(1, Math.max(0, (distA[p] / 3 - sb) / 2)) : 1;
+        const a = Math.min(1, aSky + c2 * ca * 1.1 * (1 - aSky)) * ew;
+        if (a > 0) { // 스크린 합성: 유리 위에 밝은 구름이 비치는 느낌
+          const cr2 = cl[i] * cmr * a, cg2 = cl[i + 1] * cmg * a, cb2 = cl[i + 2] * cmb * a;
+          r3 += cr2 - r3 * cr2 / 255; g3 += cg2 - g3 * cg2 / 255; b3 += cb2 - b3 * cb2 / 255;
+          if (solid > 0) { // 높은 값에서는 구름이 거울처럼 선명하게 덮임
+            const n = Math.min(1, c2 * c2 * solid) * ew;
+            r3 += (cl[i] * cmr - r3) * n; g3 += (cl[i + 1] * cmg - g3) * n; b3 += (cl[i + 2] * cmb - b3) * n;
+          }
+        }
+      }
+      d[i] = r + (r3 - r) * k; d[i + 1] = gg + (g3 - gg) * k; d[i + 2] = b + (b3 - b) * k;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  let raf = 0;
+  function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+
+  function draw() {
+    if (!W) return;
+    if (dirty.A) { renderGlass(glass.A, outA); dirty.A = false; }
+    if (dirty.B) { renderGlass(glass.B, outB); dirty.B = false; }
+    vctx.clearRect(0, 0, W, H);
+    if (mode === 'compare') {
+      vctx.drawImage(outA, 0, 0);
+      const x = Math.round(split * W);
+      vctx.save(); vctx.beginPath(); vctx.rect(x, 0, W - x, H); vctx.clip();
+      vctx.drawImage(outB, 0, 0); vctx.restore();
+    } else {
+      vctx.drawImage(origC, 0, 0);
+      if (showMask) { vctx.globalAlpha = 0.42; vctx.drawImage(overC, 0, 0); vctx.globalAlpha = 1; }
+      if (poly.length) drawPoly();
+      if (rectA && rectB) {
+        const sc = W / view.getBoundingClientRect().width;
+        vctx.save();
+        vctx.fillStyle = op === 'add' ? 'rgba(255,225,77,.22)' : 'rgba(255,90,90,.22)';
+        vctx.strokeStyle = op === 'add' ? '#ffe14d' : '#ff5a5a';
+        vctx.lineWidth = 2 * sc; vctx.setLineDash([6 * sc, 4 * sc]);
+        const x = Math.min(rectA[0], rectB[0]), y = Math.min(rectA[1], rectB[1]);
+        const w = Math.abs(rectA[0] - rectB[0]), h = Math.abs(rectA[1] - rectB[1]);
+        vctx.fillRect(x, y, w, h); vctx.strokeRect(x, y, w, h);
+        vctx.restore();
+      }
+    }
+  }
+
+  function drawPoly() {
+    const sc = W / view.getBoundingClientRect().width;
+    vctx.save();
+    vctx.lineWidth = 2 * sc;
+    vctx.strokeStyle = op === 'add' ? '#ffe14d' : '#ff5a5a';
+    vctx.fillStyle = op === 'add' ? 'rgba(255,225,77,.18)' : 'rgba(255,90,90,.18)';
+    vctx.beginPath();
+    vctx.moveTo(poly[0][0], poly[0][1]);
+    for (const p of poly.slice(1)) vctx.lineTo(p[0], p[1]);
+    if (hover) vctx.lineTo(hover[0], hover[1]);
+    vctx.closePath(); vctx.fill();
+    vctx.setLineDash([6 * sc, 4 * sc]); vctx.stroke(); vctx.setLineDash([]);
+    poly.forEach((p, i) => {
+      vctx.beginPath(); vctx.arc(p[0], p[1], (i === 0 ? 6 : 4) * sc, 0, Math.PI * 2);
+      vctx.fillStyle = i === 0 ? '#ffffff' : vctx.strokeStyle; vctx.fill();
+      vctx.lineWidth = 1.5 * sc; vctx.strokeStyle = '#1a2228'; vctx.stroke();
+      vctx.strokeStyle = op === 'add' ? '#ffe14d' : '#ff5a5a';
+    });
+    vctx.restore();
+  }
+
+  /* ---------- mask edits ---------- */
+  function pushUndo() {
+    undo.push(mctx.getImageData(0, 0, W, H));
+    if (undo.length > 25) undo.shift();
+    updUndo();
+  }
+  function updUndo() { $('undoBtn').disabled = undo.length === 0; }
+  $('undoBtn').onclick = () => {
+    if (!undo.length) return;
+    mctx.putImageData(undo.pop(), 0, 0); updUndo(); maskChanged();
+  };
+
+  function closePoly() {
+    if (poly.length < 3) { poly = []; hover = null; schedule(); return; }
+    pushUndo();
+    mctx.save();
+    mctx.globalCompositeOperation = op === 'add' ? 'source-over' : 'destination-out';
+    mctx.fillStyle = '#fff';
+    mctx.beginPath(); mctx.moveTo(poly[0][0], poly[0][1]);
+    for (const p of poly.slice(1)) mctx.lineTo(p[0], p[1]);
+    mctx.closePath(); mctx.fill(); mctx.restore();
+    poly = []; hover = null;
+    maskChanged(); setHint();
+  }
+
+  function wand(x, y) {
+    const d = origData.data, tol = +$('tol').value * 2.4, t2 = tol * tol * 3;
+    const si = (y * W + x) * 4, sr = d[si], sg = d[si + 1], sb = d[si + 2];
+    const hit = new Uint8Array(W * H), stack = new Int32Array(W * H);
+    let sp = 0; stack[sp++] = y * W + x; hit[y * W + x] = 1;
+    const edge = $('edgeStop').checked;
+    const ok = p => {
+      if (hit[p]) return false;
+      if (edge && grad[p] > 70) return false;
+      const i = p * 4, dr = d[i] - sr, dg = d[i + 1] - sg, db = d[i + 2] - sb;
+      return dr * dr + dg * dg + db * db <= t2;
+    };
+    while (sp) {
+      const p = stack[--sp], px = p % W;
+      if (px > 0 && ok(p - 1)) { hit[p - 1] = 1; stack[sp++] = p - 1; }
+      if (px < W - 1 && ok(p + 1)) { hit[p + 1] = 1; stack[sp++] = p + 1; }
+      if (p >= W && ok(p - W)) { hit[p - W] = 1; stack[sp++] = p - W; }
+      if (p < W * (H - 1) && ok(p + W)) { hit[p + W] = 1; stack[sp++] = p + W; }
+    }
+    pushUndo();
+    const mi = mctx.getImageData(0, 0, W, H), md = mi.data;
+    const add = op === 'add';
+    for (let p = 0; p < hit.length; p++) {
+      if (!hit[p]) continue;
+      const i = p * 4;
+      md[i] = md[i + 1] = md[i + 2] = 255; md[i + 3] = add ? 255 : 0;
+    }
+    mctx.putImageData(mi, 0, 0);
+    maskChanged();
+  }
+
+  /* ---------- gradient (창틀 경계) ---------- */
+  let grad = null;
+  function computeGrad() {
+    const d = origData.data, L = new Float32Array(W * H);
+    for (let p = 0, i = 0; p < L.length; p++, i += 4) L[p] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    grad = new Float32Array(W * H);
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const p = y * W + x;
+      const gx = L[p - W + 1] + 2 * L[p + 1] + L[p + W + 1] - L[p - W - 1] - 2 * L[p - 1] - L[p + W - 1];
+      const gy = L[p + W - 1] + 2 * L[p + W] + L[p + W + 1] - L[p - W - 1] - 2 * L[p - W] - L[p - W + 1];
+      grad[p] = Math.hypot(gx, gy) / 4;
+    }
+  }
+
+  /* ---------- 유리 자동 인식 ---------- */
+  function hsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), c = mx - mn;
+    let h = 0;
+    if (c) h = mx === r ? ((g - b) / c + 6) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4;
+    return [h * 60, mx ? c / mx : 0, mx];
+  }
+  function glassColorScore(h, s, v) {
+    let sc = 0;
+    if (h >= 150 && h <= 262 && s >= 0.05) sc = Math.min(1, (s - 0.03) / 0.12) * (v > 0.12 ? 1 : 0.5);
+    if (s < 0.15 && v > 0.05 && v < 0.6) sc = Math.max(sc, 0.35 + (0.6 - v) * 1.0);
+    if (s < 0.1 && v >= 0.6 && v < 0.86) sc = Math.max(sc, 0.3);
+    if ((h < 55 || h > 320) && s > 0.1) sc -= 0.7;
+    if (h >= 60 && h < 145 && s > 0.18) sc -= 0.6;
+    return sc;
+  }
+  function autoDetect() {
+    if (!W) return 0;
+    const sens = +$('sens').value;
+    const s = Math.min(1, 800 / Math.max(W, H));
+    const w = Math.max(2, Math.round(W * s)), h = Math.max(2, Math.round(H * s)), N = w * h;
+    const sc = mk(); sc.width = w; sc.height = h;
+    const c = sc.getContext('2d', { willReadFrequently: true });
+    c.drawImage(origC, 0, 0, w, h);
+    const d = c.getImageData(0, 0, w, h).data;
+
+    // 1) 색이 매끄럽게 이어지는 영역으로 분할 (창틀·경계선에서 끊김)
+    const lab = new Int32Array(N).fill(-1), stack = new Int32Array(N);
+    const regs = [];
+    for (let s0 = 0; s0 < N; s0++) {
+      if (lab[s0] >= 0) continue;
+      const id = regs.length;
+      let sp = 0, area = 0, sr = 0, sg = 0, sb = 0, x0 = w, y0 = h, x1 = 0, y1 = 0;
+      stack[sp++] = s0; lab[s0] = id;
+      while (sp) {
+        const p = stack[--sp], px = p % w, py = (p - px) / w, i = p * 4;
+        area++; sr += d[i]; sg += d[i + 1]; sb += d[i + 2];
+        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
+        const mr = sr / area, mg = sg / area, mb = sb / area;
+        const nb = [px > 0 ? p - 1 : -1, px < w - 1 ? p + 1 : -1, py > 0 ? p - w : -1, py < h - 1 ? p + w : -1];
+        for (const q of nb) {
+          if (q < 0 || lab[q] >= 0) continue;
+          const j = q * 4;
+          const local = Math.abs(d[j] - d[i]) + Math.abs(d[j + 1] - d[i + 1]) + Math.abs(d[j + 2] - d[i + 2]);
+          const drift = Math.abs(d[j] - mr) + Math.abs(d[j + 1] - mg) + Math.abs(d[j + 2] - mb);
+          if (local < 22 && drift < 75) { lab[q] = id; stack[sp++] = q; }
+        }
+      }
+      regs.push({ area, r: sr / area, g: sg / area, b: sb / area, x0, y0, x1, y1 });
+    }
+
+    // 2) 영역별 유리 판정: 색상 + 사각형에 가까운 형태 + 하늘 제외
+    const thr = 0.75 - sens * 0.006, fillMin = 0.52 - sens * 0.003, minA = N * 0.00025;
+    // 경계의 자잘한 조각은 이웃한 큰 영역에 붙임
+    for (let pass = 0; pass < 4; pass++) {
+      for (let p = 0; p < N; p++) {
+        if (regs[lab[p]].area >= minA) continue;
+        const px = p % w, i = p * 4;
+        let best = -1, bd = 1e9;
+        for (const q of [px > 0 ? p - 1 : -1, px < w - 1 ? p + 1 : -1, p >= w ? p - w : -1, p < N - w ? p + w : -1]) {
+          if (q < 0) continue;
+          const g = regs[lab[q]];
+          if (g.area < minA) continue;
+          const dd = Math.abs(d[i] - g.r) + Math.abs(d[i + 1] - g.g) + Math.abs(d[i + 2] - g.b);
+          if (dd < bd) { bd = dd; best = lab[q]; }
+        }
+        if (best >= 0) lab[p] = best;
+      }
+    }
+    const isGlass = new Uint8Array(regs.length), sky = new Uint8Array(regs.length);
+    regs.forEach(g => { [g.h, g.s, g.v] = hsv(g.r, g.g, g.b); });
+    // 하늘: 사진 위쪽 끝에 닿은 밝은 영역 + 거기에 맞닿은 밝은 영역(구름)
+    regs.forEach((g, id) => {
+      if (g.y0 === 0 && g.v > 0.45 && ((g.h > 170 && g.h < 255) || g.s < 0.15)) sky[id] = 1;
+    });
+    // 구름: 경계 대부분이 하늘에 둘러싸인 밝은 영역
+    const bTot = new Float32Array(regs.length), bSky = new Float32Array(regs.length);
+    for (let pass = 0, changed = true; changed && pass < 6; pass++) {
+      changed = false; bTot.fill(0); bSky.fill(0);
+      for (let p = 0; p < N; p++) {
+        const a = lab[p], px = p % w;
+        for (const q of [px < w - 1 ? p + 1 : -1, p < N - w ? p + w : -1]) {
+          if (q < 0) continue;
+          const b = lab[q];
+          if (a === b || regs[a].area < minA || regs[b].area < minA) continue;
+          bTot[a]++; bTot[b]++;
+          if (sky[b]) bSky[a]++;
+          if (sky[a]) bSky[b]++;
+        }
+      }
+      regs.forEach((g, id) => {
+        if (!sky[id] && bTot[id] && g.v > 0.6 && g.s < 0.4 && bSky[id] / bTot[id] > 0.4) { sky[id] = 1; changed = true; }
+      });
+    }
+    let found = 0;
+    regs.forEach((g, id) => {
+      if (g.area < minA || sky[id]) return;
+      const hh = g.h, ss = g.s, vv = g.v;
+      const bw = g.x1 - g.x0 + 1, bh = g.y1 - g.y0 + 1, fill = g.area / (bw * bh);
+      const score = glassColorScore(hh, ss, vv);
+      if (g.area > N * 0.22 && score < 0.95) return;  // 벽면 등 큰 면
+      if (bw < 3 || bh < 3 || Math.max(bw, bh) / Math.min(bw, bh) > 7) return; // 띠 모양(스팬드럴·몰딩) 제외
+      if (score >= thr && fill >= fillMin) { isGlass[id] = 1; found++; }
+    });
+
+    // 3) 마스크 만들기 → 1px 팽창(창틀 경계 보정) → 유리 안쪽 작은 구멍 메우기
+    let m = new Uint8Array(N);
+    for (let p = 0; p < N; p++) if (isGlass[lab[p]]) m[p] = 1;
+    const m2 = new Uint8Array(N);
+    for (let p = 0; p < N; p++) {
+      if (m[p]) { m2[p] = 1; continue; }
+      const px = p % w;
+      if ((px > 0 && m[p - 1]) || (px < w - 1 && m[p + 1]) || (p >= w && m[p - w]) || (p < N - w && m[p + w])) m2[p] = 1;
+    }
+    m = m2;
+    const seen = new Uint8Array(N);
+    for (let s0 = 0; s0 < N; s0++) {
+      if (m[s0] || seen[s0]) continue;
+      let sp = 0, border = false; const list = [];
+      stack[sp++] = s0; seen[s0] = 1;
+      while (sp) {
+        const p = stack[--sp], px = p % w, py = (p - px) / w; list.push(p);
+        if (px === 0 || py === 0 || px === w - 1 || py === h - 1) border = true;
+        const nb = [px > 0 ? p - 1 : -1, px < w - 1 ? p + 1 : -1, py > 0 ? p - w : -1, py < h - 1 ? p + w : -1];
+        for (const q of nb) if (q >= 0 && !m[q] && !seen[q]) { seen[q] = 1; stack[sp++] = q; }
+        if (list.length > N * 0.004) border = true;
+      }
+      if (!border) for (const p of list) m[p] = 1;
+    }
+
+    // 4) 원본 크기로 확대해 마스크에 반영
+    const img = c.createImageData(w, h);
+    for (let p = 0; p < N; p++) { const i = p * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = m[p] ? 255 : 0; }
+    c.putImageData(img, 0, 0);
+    pushUndo();
+    mctx.clearRect(0, 0, W, H);
+    mctx.imageSmoothingEnabled = true;
+    mctx.drawImage(sc, 0, 0, W, H);
+    const full = mctx.getImageData(0, 0, W, H), fd = full.data;
+    for (let i = 3; i < fd.length; i += 4) fd[i] = fd[i] >= 128 ? 255 : 0;
+    mctx.putImageData(full, 0, 0);
+    maskChanged();
+    return found;
+  }
+  $('sens').oninput = e => $('sensOut').value = e.target.value;
+  $('autoBtn').onclick = () => {
+    const btn = $('autoBtn'); btn.disabled = true; btn.textContent = '인식 중…';
+    setTimeout(() => {
+      const n = autoDetect();
+      btn.disabled = false; btn.textContent = '유리 자동 인식';
+      setMode('poly'); setOp('add');
+      $('hint').innerHTML = n
+        ? `유리면 <b>${n}곳</b>을 찾았습니다 (분홍색). 빠진 곳은 사각형·다각형으로 추가하고, 잘못 잡힌 곳은 <b>빼기</b>로 지운 뒤 <b>비교</b>를 누르세요.`
+        : '유리를 찾지 못했습니다. 인식 민감도를 높이거나 사각형·다각형으로 직접 지정해 주세요.';
+    }, 30);
+  };
+
+  /* ---------- pointer ---------- */
+  let rectA = null, rectB = null;
+  function pt(e) {
+    const r = view.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(W - 1, (e.clientX - r.left) / r.width * W)),
+      Math.max(0, Math.min(H - 1, (e.clientY - r.top) / r.height * H)),
+    ];
+  }
+  function setSplitFromEvent(e) {
+    const r = view.getBoundingClientRect();
+    split = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    placeSplit(); schedule();
+  }
+  function placeSplit() {
+    $('split').style.left = (split * view.getBoundingClientRect().width) + 'px';
+  }
+
+  view.addEventListener('pointerdown', e => {
+    if (!W) return;
+    if (mode === 'compare') { dragging = true; view.setPointerCapture(e.pointerId); setSplitFromEvent(e); return; }
+    const p = pt(e);
+    if (mode === 'wand') { wand(Math.floor(p[0]), Math.floor(p[1])); return; }
+    if (mode === 'rect') { rectA = p; rectB = p; view.setPointerCapture(e.pointerId); return; }
+    const sc = W / view.getBoundingClientRect().width;
+    if (poly.length >= 3) {
+      const f = poly[0];
+      if (Math.hypot(p[0] - f[0], p[1] - f[1]) < 12 * sc) { closePoly(); return; }
+    }
+    const last = poly[poly.length - 1];
+    if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 3 * sc) poly.push(p);
+    setHint(); schedule();
+  });
+  view.addEventListener('pointermove', e => {
+    if (mode === 'compare' && dragging) setSplitFromEvent(e);
+    else if (mode === 'poly' && poly.length) { hover = pt(e); schedule(); }
+    else if (mode === 'rect' && rectA) { rectB = pt(e); schedule(); }
+  });
+  view.addEventListener('pointerup', () => {
+    dragging = false;
+    if (mode === 'rect' && rectA) {
+      const x = Math.min(rectA[0], rectB[0]), y = Math.min(rectA[1], rectB[1]);
+      const w = Math.abs(rectA[0] - rectB[0]), h = Math.abs(rectA[1] - rectB[1]);
+      rectA = rectB = null;
+      if (w > 3 && h > 3) {
+        pushUndo();
+        mctx.save();
+        mctx.globalCompositeOperation = op === 'add' ? 'source-over' : 'destination-out';
+        mctx.fillStyle = '#fff'; mctx.fillRect(x, y, w, h); mctx.restore();
+        maskChanged();
+      } else schedule();
+    }
+  });
+  view.addEventListener('pointercancel', () => { dragging = false; });
+  view.addEventListener('dblclick', () => { if (mode === 'poly') closePoly(); });
+
+  const knob = $('knob');
+  knob.addEventListener('pointerdown', e => { dragging = true; knob.setPointerCapture(e.pointerId); e.preventDefault(); });
+  knob.addEventListener('pointermove', e => { if (dragging) setSplitFromEvent(e); });
+  knob.addEventListener('pointerup', () => { dragging = false; });
+  knob.addEventListener('keydown', e => {
+    const step = e.shiftKey ? 0.1 : 0.02;
+    if (e.key === 'ArrowLeft') split = Math.max(0, split - step);
+    else if (e.key === 'ArrowRight') split = Math.min(1, split + step);
+    else return;
+    e.preventDefault(); placeSplit(); schedule();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $('undoBtn').click(); }
+    else if (mode === 'poly' && e.key === 'Enter') closePoly();
+    else if (mode === 'poly' && e.key === 'Escape') { poly = []; hover = null; setHint(); schedule(); }
+  });
+
+  /* ---------- modes ---------- */
+  function setMode(m) {
+    mode = m; poly = []; hover = null;
+    $('mCompare').setAttribute('aria-pressed', m === 'compare');
+    $('mPoly').setAttribute('aria-pressed', m === 'poly');
+    $('mRect').setAttribute('aria-pressed', m === 'rect');
+    $('mWand').setAttribute('aria-pressed', m === 'wand');
+    stageCol.classList.toggle('editing', m !== 'compare');
+    stageCol.className = stageCol.className.replace(/\bmode-\w+/g, '').trim() + ' mode-' + m;
+    setHint(); placeSplit(); schedule();
+  }
+  function setOp(o) {
+    op = o;
+    $('opAdd').setAttribute('aria-pressed', o === 'add');
+    $('opSub').setAttribute('aria-pressed', o === 'sub');
+    setHint(); schedule();
+  }
+  function setHint() {
+    const h = $('hint');
+    const verb = op === 'add' ? '추가' : '제외';
+    if (mode === 'compare') h.innerHTML = '사진 위를 <b>드래그</b>하면 세로 비교선이 따라 움직입니다. 왼쪽은 유리 A, 오른쪽은 유리 B입니다.';
+    else if (mode === 'poly') h.innerHTML = poly.length
+      ? `점 ${poly.length}개. <b>첫 점을 클릭</b>하거나 더블클릭·Enter로 닫으면 유리 영역에 ${verb}됩니다. Esc는 취소.`
+      : `유리 모서리를 차례로 클릭해 다각형을 그리세요. 닫으면 유리 영역에 ${verb}됩니다.`;
+    else if (mode === 'rect') h.innerHTML = `유리 한 장을 대각선으로 <b>드래그</b>하면 사각형 영역이 ${verb}됩니다.`;
+    else h.innerHTML = `유리면 한 장을 <b>클릭</b>하면 창틀 안쪽만 ${verb}됩니다. 너무 넓게 잡히면 허용치를 낮추세요.`;
+  }
+  $('mRect').onclick = () => setMode('rect');
+  $('mCompare').onclick = () => setMode('compare');
+  $('mPoly').onclick = () => setMode('poly');
+  $('mWand').onclick = () => setMode('wand');
+  $('opAdd').onclick = () => setOp('add');
+  $('opSub').onclick = () => setOp('sub');
+  $('tol').oninput = e => $('tolOut').value = e.target.value;
+  $('maskToggle').onclick = e => {
+    showMask = !showMask;
+    e.target.setAttribute('aria-pressed', showMask);
+    e.target.textContent = showMask ? '영역 표시 켜짐' : '영역 표시 꺼짐';
+    if (mode === 'compare' && showMask) setMode('poly'); else schedule();
+  };
+  $('clearMask').onclick = () => { $('clearConfirm').hidden = false; };
+  $('clearNo').onclick = () => { $('clearConfirm').hidden = true; };
+  $('clearYes').onclick = () => {
+    pushUndo(); mctx.clearRect(0, 0, W, H); maskChanged(); $('clearConfirm').hidden = true;
+  };
+
+  /* ---------- 색 변환: sRGB ↔ CIELAB ↔ 먼셀(근사) ---------- */
+  const toHex = rgb => '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  function srgbToLab([r, g, b]) {
+    const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    const R = lin(r), G = lin(g), B = lin(b);
+    const X = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047;
+    const Y = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+    const Z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883;
+    const f = t => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  }
+  function labToSrgb([L, a, b]) {
+    const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+    const inv = t => t ** 3 > 216 / 24389 ? t ** 3 : (116 * t - 16) / (24389 / 27);
+    const X = inv(fx) * 0.95047, Y = inv(fy), Z = inv(fz) * 1.08883;
+    const R = 3.2406 * X - 1.5372 * Y - 0.4986 * Z;
+    const G = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
+    const B = 0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+    const gam = v => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.max(0, v) ** (1 / 2.4) - 0.055) * 255;
+    const out = [gam(R), gam(G), gam(B)];
+    return { rgb: out.map(v => Math.max(0, Math.min(255, Math.round(v)))), inGamut: out.every(v => v >= -1.5 && v <= 256.5) };
+  }
+  // 먼셀 명도 V → 시감반사율 Y (ASTM D1535 다항식) → L*
+  const valueToY = V => 1.1914 * V - 0.22533 * V ** 2 + 0.23352 * V ** 3 - 0.020484 * V ** 4 + 0.00081939 * V ** 5;
+  const valueToL = V => { const y = Math.min(1, valueToY(V) / 102.57); return y > 216 / 24389 ? 116 * Math.cbrt(y) - 16 : y * 24389 / 27; };
+  function lToValue(L) { let lo = 0, hi = 10; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; valueToL(m) < L ? lo = m : hi = m; } return (lo + hi) / 2; }
+  // 먼셀 색상 번호(10RP=0, 5R=5, 10R=10 … 10RP=100) ↔ CIELAB 색상각 기준점
+  const FAM = ['R', 'YR', 'Y', 'GY', 'G', 'BG', 'B', 'PB', 'P', 'RP'];
+  const HN = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+  const HA = [3, 25, 40, 58, 73, 88, 98, 112, 132, 155, 172, 190, 207, 228, 250, 275, 293, 312, 328, 345, 363];
+  const CSCALE = 5.0; // 먼셀 채도 1 ≈ C*ab 5
+  function hueToAngle(h) {
+    h = ((h % 100) + 100) % 100;
+    for (let i = 0; i < HN.length - 1; i++) if (h <= HN[i + 1]) return (HA[i] + (HA[i + 1] - HA[i]) * (h - HN[i]) / (HN[i + 1] - HN[i])) % 360;
+    return HA[0];
+  }
+  function angleToHue(a) {
+    a = ((a % 360) + 360) % 360; if (a < HA[0]) a += 360;
+    for (let i = 0; i < HA.length - 1; i++) if (a <= HA[i + 1]) return HN[i] + (HN[i + 1] - HN[i]) * (a - HA[i]) / (HA[i + 1] - HA[i]);
+    return 0;
+  }
+  function parseMunsell(str) {
+    const t = str.trim().toUpperCase().replace(/\s+/g, ' ');
+    let m = t.match(/^N ?(\d+(?:\.\d+)?)(?: ?\/ ?0?(?:\.0+)?)?$/);
+    if (m) { const V = +m[1]; return V >= 0 && V <= 10 ? { neutral: true, V, C: 0, H: 0 } : null; }
+    m = t.match(/^(\d+(?:\.\d+)?) ?(RP|YR|GY|BG|PB|R|Y|G|B|P) ?(\d+(?:\.\d+)?) ?\/ ?(\d+(?:\.\d+)?)$/);
+    if (!m) return null;
+    const hn = +m[1], V = +m[3], C = +m[4];
+    if (hn < 0 || hn > 10 || V < 0 || V > 10 || C > 40) return null;
+    return { neutral: C === 0, H: FAM.indexOf(m[2]) * 10 + hn, V, C };
+  }
+  function munsellToRgb(mu) {
+    const L = valueToL(mu.V), cab = mu.C * CSCALE, ang = hueToAngle(mu.H) * Math.PI / 180;
+    return labToSrgb([L, cab * Math.cos(ang), cab * Math.sin(ang)]);
+  }
+  const fmt = v => (Math.round(v * 10) / 10).toString();
+  function rgbToMunsell(rgb) {
+    const [L, a, b] = srgbToLab(rgb), V = lToValue(L), C = Math.hypot(a, b) / CSCALE;
+    if (C < 0.4) return 'N ' + fmt(V);
+    let H = Math.round(angleToHue(Math.atan2(b, a) * 180 / Math.PI) * 2) / 2; // 0.5 단위
+    if (H <= 0) H += 100;
+    let fi = Math.ceil(H / 10) - 1, hn = H - fi * 10;
+    if (hn === 0) { hn = 10; }
+    fi = (fi + 10) % 10;
+    return `${fmt(hn)}${FAM[fi]} ${fmt(V)}/${fmt(C)}`;
+  }
+
+  /* ---------- glass panels ---------- */
+  function codeLabel(g) { return g.cmode === 'munsell' ? (g.munsell || rgbToMunsell(hex(g.color))) : g.color.toUpperCase(); }
+  function buildCard(key) {
+    const card = $('card' + key), g = glass[key];
+    g.cmode = g.cmode || 'rgb';
+    const [r0, g0, b0] = hex(g.color);
+    card.innerHTML = `
+      <h2><span class="tag">${key}</span>유리 ${key} ${key === 'A' ? '(왼쪽)' : '(오른쪽)'}</h2>
+      <div class="namebox"><span>제품</span>
+        <select id="prod${key}" aria-label="유리 ${key} 제품 선택">
+          ${g.preset < 0 ? '<option value="-1" selected>직접 지정한 색</option>' : ''}
+          ${Object.keys(CAT_KO).map(cat => `<optgroup label="${cat} (${CAT_KO[cat]})">${PRESETS.map((p, i) => p.cat !== cat ? '' :
+            `<option value="${i}" ${i === g.preset ? 'selected' : ''}>${p.code} · ${p.series}</option>`).join('')}</optgroup>`).join('')}
+        </select>
+      </div>
+      ${g.preset >= 0 ? (() => { const p = PRESETS[g.preset]; return `
+      <div class="prodinfo">
+        <span class="pcolor" style="background:${p.color}"></span>
+        <dl>
+          <div><dt>Code</dt><dd>${p.code}</dd></div>
+          <div><dt>KCC Code</dt><dd>${p.kcc}</dd></div>
+          <div><dt>Munsell</dt><dd>${p.munsell}</dd></div>
+          <div><dt>분류</dt><dd>${CAT_KO[p.cat]} · ${p.hs}</dd></div>
+        </dl>
+      </div>`; })() : ''}
+      <div class="namebox"><span>표시 이름</span><input type="text" id="name${key}" value="${g.name}" maxlength="40"></div>
+      <div class="cin">
+        <div class="cin-head"><span>색상 코드</span>
+          <div class="seg small" role="group" aria-label="유리 ${key} 색상 입력 방식">
+            <button id="cmR${key}" aria-pressed="${g.cmode === 'rgb'}">RGB</button>
+            <button id="cmM${key}" aria-pressed="${g.cmode === 'munsell'}">먼셀</button>
+          </div>
+        </div>
+        <div class="cin-row" id="rgbRow${key}" ${g.cmode === 'rgb' ? '' : 'hidden'}>
+          <input type="color" id="color${key}" value="${g.color}" aria-label="유리 ${key} 색 고르기">
+          <input type="text" class="code" id="hex${key}" value="${g.color.toUpperCase()}" maxlength="7" spellcheck="false" aria-label="HEX 코드">
+          <div class="rgbnums"><label class="ch">R<input type="number" id="r${key}" min="0" max="255" value="${r0}"></label>
+          <label class="ch">G<input type="number" id="g${key}" min="0" max="255" value="${g0}"></label>
+          <label class="ch">B<input type="number" id="b${key}" min="0" max="255" value="${b0}"></label></div>
+        </div>
+        <div class="cin-row" id="munRow${key}" ${g.cmode === 'munsell' ? '' : 'hidden'}>
+          <span class="mswatch" id="msw${key}" style="background:${g.color}"></span>
+          <input type="text" class="code wide" id="mun${key}" value="${g.munsell || rgbToMunsell(hex(g.color))}" placeholder="예: 5BG 6/4, N 5" spellcheck="false" aria-label="먼셀 코드 (색상 명도/채도)">
+        </div>
+        <p class="conv" id="conv${key}"></p>
+      </div>
+      <div class="field"><span>색 농도</span><input type="range" id="tint${key}" min="0" max="100" value="${g.tint}"><output id="tintO${key}">${g.tint}</output></div>
+      <div class="field"><span>반사</span><input type="range" id="refl${key}" min="0" max="80" value="${g.refl}"><output id="reflO${key}">${g.refl}</output></div>
+      <div class="field"><span>구름 반사</span><input type="range" id="cloud${key}" min="0" max="100" value="${g.cloud}"><output id="cloudO${key}">${g.cloud}</output></div>
+      <div class="field"><span>구름 크기</span><input type="range" id="csize${key}" min="0" max="100" value="${g.csize}"><output id="csizeO${key}">${g.csize}</output></div>
+      <div class="row"><button class="btn small" id="cshuf${key}">구름 배치 바꾸기</button><button class="btn small" id="ccopy${key}">${key === 'A' ? 'B' : 'A'}와 같은 구름</button></div>`;
+    $('prod' + key).onchange = e => {
+      const i = +e.target.value; if (i < 0) return;
+      const p = PRESETS[i];
+      Object.assign(g, { name: p.name, color: p.color, tint: p.tint, refl: p.refl, munsell: p.munsell, preset: i });
+      buildCard(key); changed(key);
+    };
+    const unpreset = () => {
+      if (g.preset < 0) return;
+      if (g.name === PRESETS[g.preset].name) { g.name = '직접 지정 색'; $('name' + key).value = g.name; }
+      g.preset = -1;
+      const sel = $('prod' + key);
+      if (!sel.querySelector('option[value="-1"]')) sel.insertAdjacentHTML('afterbegin', '<option value="-1">직접 지정한 색</option>');
+      sel.value = '-1';
+      card.querySelector('.prodinfo')?.remove();
+    };
+    const conv = (msg, warn) => { const c = $('conv' + key); c.innerHTML = msg; c.classList.toggle('warn', !!warn); };
+    const showConv = () => {
+      const rgb = hex(g.color);
+      if (g.preset >= 0) { conv(`카탈로그 먼셀 <b>${PRESETS[g.preset].munsell}</b> · 색상 샘플 RGB <b>${g.color.toUpperCase()}</b>`); return; }
+      if (g.cmode === 'rgb') conv(`≈ 먼셀 <b>${rgbToMunsell(rgb)}</b>`);
+      else {
+        const mu = g.munsell && parseMunsell(g.munsell);
+        const oog = mu && !munsellToRgb(mu).inGamut;
+        conv(`≈ RGB <b>${g.color.toUpperCase()}</b> (${rgb.join(', ')})${oog ? ' · 화면 표현 범위를 넘어 가장 가까운 색으로 표시' : ''}`, oog);
+      }
+    };
+    const setRgb = (rgb, from) => {
+      g.color = toHex(rgb); g.munsell = null;
+      if (from !== 'picker') $('color' + key).value = g.color;
+      if (from !== 'hex') $('hex' + key).value = g.color.toUpperCase();
+      if (from !== 'num') ['r', 'g', 'b'].forEach((c, i) => $(c + key).value = rgb[i]);
+      $('msw' + key).style.background = g.color;
+      $('mun' + key).value = rgbToMunsell(rgb);
+      unpreset(); showConv(); changed(key);
+    };
+    $('name' + key).oninput = e => { g.name = e.target.value; chips(); };
+    $('color' + key).oninput = e => setRgb(hex(e.target.value), 'picker');
+    $('hex' + key).oninput = e => {
+      let v = e.target.value.trim(); if (v[0] !== '#') v = '#' + v;
+      const ok = /^#[0-9a-f]{6}$/i.test(v);
+      e.target.classList.toggle('bad', !ok);
+      if (ok) setRgb(hex(v), 'hex'); else conv('HEX 코드는 #과 6자리로 입력하세요. 예: #5FA585', true);
+    };
+    ['r', 'g', 'b'].forEach(c => $(c + key).oninput = () => {
+      const rgb = ['r', 'g', 'b'].map(k => +$(k + key).value);
+      const ok = rgb.every(v => Number.isFinite(v) && v >= 0 && v <= 255);
+      if (ok) setRgb(rgb.map(Math.round), 'num'); else conv('R·G·B 값은 0~255 사이 숫자입니다.', true);
+    });
+    $('mun' + key).oninput = e => {
+      const mu = parseMunsell(e.target.value);
+      e.target.classList.toggle('bad', !mu);
+      if (!mu) { conv('먼셀 코드는 <b>색상 명도/채도</b> 순서입니다. 예: 5BG 6/4, 10GY 5/2, N 5', true); return; }
+      const res = munsellToRgb(mu);
+      g.color = toHex(res.rgb); g.munsell = e.target.value.trim().toUpperCase();
+      $('msw' + key).style.background = g.color;
+      $('color' + key).value = g.color; $('hex' + key).value = g.color.toUpperCase();
+      ['r', 'g', 'b'].forEach((c, i) => $(c + key).value = res.rgb[i]);
+      unpreset(); showConv(); changed(key);
+    };
+    const setCmode = m => {
+      g.cmode = m;
+      $('cmR' + key).setAttribute('aria-pressed', m === 'rgb');
+      $('cmM' + key).setAttribute('aria-pressed', m === 'munsell');
+      $('rgbRow' + key).hidden = m !== 'rgb';
+      $('munRow' + key).hidden = m !== 'munsell';
+      if (m === 'munsell' && !g.munsell) $('mun' + key).value = rgbToMunsell(hex(g.color));
+      $('hex' + key).classList.remove('bad'); $('mun' + key).classList.remove('bad');
+      showConv(); chips();
+    };
+    $('cmR' + key).onclick = () => setCmode('rgb');
+    $('cmM' + key).onclick = () => setCmode('munsell');
+    $('tint' + key).oninput = e => { g.tint = +e.target.value; $('tintO' + key).value = g.tint; changed(key); };
+    $('refl' + key).oninput = e => { g.refl = +e.target.value; $('reflO' + key).value = g.refl; changed(key); };
+    $('cloud' + key).oninput = e => { g.cloud = +e.target.value; $('cloudO' + key).value = g.cloud; changed(key); };
+    $('csize' + key).oninput = e => { g.csize = +e.target.value; $('csizeO' + key).value = g.csize; changed(key); };
+    $('cshuf' + key).onclick = () => { g.cseed = (g.cseed % 997) + 1; changed(key); };
+    $('ccopy' + key).onclick = () => {
+      const o = glass[key === 'A' ? 'B' : 'A'];
+      Object.assign(g, { cloud: o.cloud, csize: o.csize, cseed: o.cseed });
+      $('cloud' + key).value = g.cloud; $('cloudO' + key).value = g.cloud;
+      $('csize' + key).value = g.csize; $('csizeO' + key).value = g.csize;
+      changed(key);
+    };
+    showConv();
+  }
+  function changed(key) { dirty[key] = true; chips(); if (mode !== 'compare') setMode('compare'); else schedule(); }
+  function chips() {
+    for (const k of ['A', 'B']) {
+      const c = $('chip' + k);
+      c.querySelector('i').style.background = glass[k].color;
+      const g = glass[k], pp = g.preset >= 0 ? PRESETS[g.preset] : null;
+      c.querySelector('span').textContent = k + ' · ' + (g.name || '이름 없음') + ' · ' + (pp ? pp.munsell : codeLabel(g));
+    }
+  }
+  function mix(a, b, t) {
+    const x = hex(a), y = hex(b);
+    return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')';
+  }
+
+  /* ---------- 구름 이미지 종류 ---------- */
+  function setCloudSrc(m) {
+    if (m === 'photo' && !skyPhoto) { $('skyFile').click(); return; }
+    cloudSrc = m;
+    for (const [id, k] of [['csSky1', 'sky1'], ['csSky2', 'sky2'], ['csGen', 'gen'], ['csPhoto', 'photo']]) $(id).setAttribute('aria-pressed', m === k);
+    dirty.A = dirty.B = true; schedule();
+  }
+  $('csGen').onclick = () => setCloudSrc('gen');
+  $('sealant').oninput = e => { $('sealantO').value = e.target.value; dirty.A = dirty.B = true; schedule(); };
+  $('csSky1').onclick = () => setCloudSrc('sky1');
+  $('csSky2').onclick = () => setCloudSrc('sky2');
+  $('csPhoto').onclick = () => setCloudSrc('photo');
+  $('skyFile').onchange = e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    readImage(f).then(img => {
+      skyPhoto = img; cloudCache.clear();
+      $('skyName').textContent = f.name;
+      setCloudSrc('photo');
+    }).catch(code => { $('skyName').textContent = LOAD_ERR[code] || LOAD_ERR.decode; });
+  };
+
+  /* ---------- loading ---------- */
+  // 사진 파일 → Image (blob URL이 막힌 환경이면 data URL로 다시 시도)
+  function readImage(f) {
+    return new Promise((resolve, reject) => {
+      const name = (f.name || '').toLowerCase();
+      if (/\.(heic|heif)$/.test(name) || /heic|heif/.test(f.type)) { reject('heic'); return; }
+      if (f.type && !f.type.startsWith('image/')) { reject('type'); return; }
+      const viaData = () => {
+        const fr = new FileReader();
+        fr.onload = () => { const im = new Image(); im.onload = () => resolve(im); im.onerror = () => reject('decode'); im.src = fr.result; };
+        fr.onerror = () => reject('read');
+        fr.readAsDataURL(f);
+      };
+      try {
+        const url = URL.createObjectURL(f), im = new Image();
+        im.onload = () => { resolve(im); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+        im.onerror = () => { URL.revokeObjectURL(url); viaData(); };
+        im.src = url;
+      } catch (e) { viaData(); }
+    });
+  }
+  function loadMsg(text, ok) {
+    const m = $('loadMsg'); m.hidden = !text; m.textContent = text || ''; m.classList.toggle('ok', !!ok);
+  }
+  const LOAD_ERR = {
+    heic: '아이폰 HEIC 사진은 브라우저에서 열 수 없습니다. 사진 앱에서 JPG로 저장(또는 공유 → JPG 변환)한 뒤 불러와 주세요.',
+    type: '이미지 파일이 아닙니다. JPG·PNG·WEBP 사진을 골라 주세요.',
+    decode: '사진을 읽지 못했습니다. 파일이 손상됐거나 지원하지 않는 형식입니다. JPG로 다시 저장해 보세요.',
+    read: '파일을 읽지 못했습니다. 다시 시도해 주세요.',
+  };
+  function loadFile(f) {
+    if (!f) return;
+    loadMsg('사진을 불러오는 중…', true);
+    readImage(f).then(img => {
+      setTimeout(() => {
+        try {
+          setSource(img);
+          undo.length = 0;
+          const n = autoDetect();
+          undo.length = 0; updUndo();
+          setOp('add'); setMode('compare');
+          loadMsg(`"${f.name || '붙여넣은 사진'}"을 불러왔습니다.`, true);
+          $('hint').innerHTML = n
+            ? `유리면 <b>${n}곳</b>을 자동으로 찾아 색을 입혔습니다. 잘못 칠해진 곳은 <b>사각형·다각형·클릭 선택</b>에서 <b>빼기</b>로 지우세요.`
+            : '유리를 찾지 못했습니다. 인식 민감도를 높여 <b>유리 자동 인식</b>을 다시 누르거나 직접 지정해 주세요.';
+        } catch (e) {
+          loadMsg('사진을 처리하다 오류가 났습니다: ' + e.message);
+        }
+      }, 20);
+    }).catch(code => loadMsg(LOAD_ERR[code] || LOAD_ERR.decode));
+  }
+  $('fileBtn').onclick = () => $('file').click();
+  $('skyBtn').onclick = () => $('skyFile').click();
+  $('file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+  document.addEventListener('paste', e => {
+    const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+    if (it) loadFile(it.getAsFile());
+  });
+  ['dragover', 'drop'].forEach(t => document.addEventListener(t, e => {
+    e.preventDefault();
+    if (t === 'drop') loadFile(e.dataTransfer.files[0]);
+  }));
+  $('sampleBtn').onclick = () => { makeSample(); setMode('compare'); };
+
+  /* ---------- sample facade ---------- */
+  function makeSample() {
+    const c = mk(); c.width = 1600; c.height = 1000;
+    const x = c.getContext('2d');
+    const panes = [];
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+    let g = x.createLinearGradient(0, 0, 0, 1000);
+    g.addColorStop(0, '#7fa9cf'); g.addColorStop(0.7, '#d9e5ec'); g.addColorStop(1, '#eef2f2');
+    x.fillStyle = g; x.fillRect(0, 0, 1600, 1000);
+    x.fillStyle = 'rgba(255,255,255,.55)';
+    for (let i = 0; i < 9; i++) { x.beginPath(); x.ellipse(rnd() * 1600, 60 + rnd() * 260, 90 + rnd() * 140, 22 + rnd() * 20, 0, 0, 7); x.fill(); }
+
+    // low-rise block (left)
+    x.fillStyle = '#c9c4bb'; x.fillRect(0, 500, 420, 500);
+    x.fillStyle = '#b3ada3'; x.fillRect(0, 488, 430, 14);
+    for (let r = 0; r < 5; r++) for (let k = 0; k < 4; k++) {
+      const px = 30 + k * 98, py = 530 + r * 80, pw = 70, ph = 52;
+      paintPane(x, px, py, pw, ph, rnd); panes.push([px, py, pw, ph]);
+    }
+    // tower curtain wall
+    const tx = 470, tw = 760, ty = 110;
+    x.fillStyle = '#3a4248'; x.fillRect(tx - 8, ty - 14, tw + 16, 1000);
+    const cols = 8, rows = 13, cw = tw / cols, rh = 66;
+    for (let r = 0; r < rows; r++) {
+      const py = ty + r * rh;
+      x.fillStyle = '#8c9297'; x.fillRect(tx, py + rh - 12, tw, 12); // spandrel
+      for (let k = 0; k < cols; k++) {
+        const px = tx + k * cw + 3, pw = cw - 6, ph = rh - 16;
+        paintPane(x, px, py + 2, pw, ph, rnd, (k + r * 0.6) / cols);
+        panes.push([px, py + 2, pw, ph]);
+      }
+    }
+    // right building
+    x.fillStyle = '#d7d2c9'; x.fillRect(1290, 380, 310, 620);
+    for (let r = 0; r < 7; r++) for (let k = 0; k < 3; k++) {
+      const px = 1315 + k * 95, py = 410 + r * 76, pw = 72, ph = 50;
+      paintPane(x, px, py, pw, ph, rnd); panes.push([px, py, pw, ph]);
+    }
+    // ground & trees
+    x.fillStyle = '#9a9a93'; x.fillRect(0, 930, 1600, 70);
+    x.fillStyle = '#b5b4ab'; x.fillRect(0, 925, 1600, 8);
+    for (let i = 0; i < 7; i++) {
+      const cx = 120 + i * 230 + rnd() * 40;
+      x.fillStyle = '#4a3a2c'; x.fillRect(cx - 5, 860, 10, 70);
+      x.fillStyle = i % 2 ? '#3f6b3d' : '#4f7a42';
+      x.beginPath(); x.ellipse(cx, 840, 55, 48, 0, 0, 7); x.fill();
+      x.fillStyle = 'rgba(255,255,255,.08)'; x.beginPath(); x.ellipse(cx - 15, 825, 30, 22, 0, 0, 7); x.fill();
+    }
+    setSource(c, m => { m.fillStyle = '#fff'; panes.forEach(p => m.fillRect(...p)); });
+  }
+  function paintPane(x, px, py, pw, ph, rnd, t = 0.5) {
+    const g = x.createLinearGradient(px, py, px + pw * 0.4, py + ph);
+    const l = 0.85 + rnd() * 0.25;
+    g.addColorStop(0, shade('#b9c6cf', l)); g.addColorStop(1, shade('#56636d', l));
+    x.fillStyle = g; x.fillRect(px, py, pw, ph);
+    x.fillStyle = 'rgba(255,255,255,' + (0.08 + 0.18 * Math.max(0, 1 - Math.abs(t - 0.35) * 3)) + ')';
+    x.beginPath(); x.moveTo(px + pw * 0.15, py); x.lineTo(px + pw * 0.55, py); x.lineTo(px + pw * 0.25, py + ph); x.lineTo(px - pw * 0.15, py + ph); x.closePath();
+    x.save(); x.rect(px, py, pw, ph); x.clip(); x.fill(); x.restore();
+  }
+  function shade(h, l) { return 'rgb(' + hex(h).map(v => Math.min(255, Math.round(v * l))).join(',') + ')'; }
+
+  buildCard('A'); buildCard('B'); chips();
+  makeSample(); setMode('compare');
+})();
+</script>
+
+</body>
+</html>
